@@ -1,0 +1,155 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1265\cocoasubrtf210
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural
+
+\f0\fs24 \cf0 declare\
+\
+%Transforme une note sous format record \
+fun \{ToNote Note\}\
+\
+   case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#')\
+   [] Atom then\
+      case \{AtomToString Atom\} of [N] then note(nom:Atom octave:4 alteration:none)\
+      [] [N O] then note(nom:\{StringToAtom [N]\}octave:\{StringToInt [O]\} alteration:none)\
+      else nil\
+      end\
+   else nil\
+   end\
+end\
+\
+class Note\
+\
+   attr next prev first last note transformation\
+      \
+   meth init(N P T S) next := nil\
+      first := self\
+      last := self\
+      if (P == nil) == false then\
+	 prev := P\
+      else\
+	 prev := nil\
+      end\
+      next := S\
+      note := N\
+      transformation := T\
+\
+      \{self createSuite\}\
+      \
+   end\
+   \
+   meth getNext($)\
+      @next\
+   end\
+\
+   meth getPrev($)\
+      @prev\
+   end\
+\
+   meth getFirst($)\
+      @first\
+   end\
+\
+   meth getLast($)\
+      @last\
+   end\
+\
+   meth getNote($)\
+      @note\
+   end\
+\
+   meth getTransformation($)\
+      @transformation\
+   end\
+\
+   meth setNext(N)\
+      next:= N\
+   end\
+\
+   meth setPrev(P)\
+      prev:= P\
+   end\
+\
+   meth setFirst(F)\
+      first := F\
+   end\
+\
+   meth setLast(L)\
+      last:=L\
+   end\
+   \
+   meth setNote(N)\
+      note := N\
+   end\
+\
+   meth addTransformation(T)\
+      if @transformation == nil then transformation := T\
+      else transformation :=  T|@transformation end\
+   end\
+   \
+   meth createSuite\
+      \
+      case @note of X|Xr then\
+         if @next == nil then \
+	    next := \{New Note init(Xr self @transformation nil)\}\
+	    note := X\
+	    \{self createSuite\}\
+	 else\
+	    if(Xr == nil) == false then\
+	       local B = @next\
+	       in\
+		  next := \{New Note init(Xr self @transformation B)\}\
+	       end\
+	       note := X\
+	       \{self createSuite\}\
+	    else\
+	       note := X\
+	       \{self createSuite\}\
+	    end\
+	    \
+	 end\
+	 \
+	 	    \
+      else\
+	 if \{Atom.is @note\} == false then\
+	    case @note of Nom#Octave then\
+	       note:= \{ToNote @note\}\
+	    else\
+	 \
+	       local R = \{Record.make \{Record.label @note\} [facteur]\} in\
+		  R.facteur = @note.facteur\
+		  \{self addTransformation(R)\}\
+	       end\
+	       note := @note.1\
+	       \{self createSuite\}\
+	    end\
+\
+	 else\
+	    note:= \{ToNote @note\}\
+	 end\
+	 \
+	 \
+      end\
+      \
+   end\
+   \
+   \
+end\
+\
+\
+local X C  in\
+\
+   C = \{NewCell nil\}\
+\
+   X = \{New Note init([[[a2] [b b]] reduire(facteur:3.0 [etirer(facteur:3.0 [c d dom(facteur:4.0 l#2)]) d]) e f] nil nil nil)\}\
+   C := X\
+   \
+   for  while:(\{@C getNext($)\} == nil) == false do\
+      \{Browse \{@C getNote($)\} \}\
+      \{Browse \{@C getTransformation($)\}\}\
+   C := \{@C getNext($)\}\
+   end\
+   \
+end\
+}

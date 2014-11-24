@@ -1,3 +1,122 @@
+declare
+class Note
+
+   attr next prev first last note transformation
+      
+   meth init(N P T S) next := nil
+      first := self
+      last := self
+      if (P == nil) == false then
+	 prev := P
+      else
+	 prev := nil
+      end
+      next := S
+      note := N
+      transformation := T
+
+      {self createSuite}
+      
+   end
+   
+   meth getNext($)
+      @next
+   end
+
+   meth getPrev($)
+      @prev
+   end
+
+   meth getFirst($)
+      @first
+   end
+
+   meth getLast($)
+      @last
+   end
+
+   meth getNote($)
+      @note
+   end
+
+   meth getTransformation($)
+      @transformation
+   end
+
+   meth setNext(N)
+      next:= N
+   end
+
+   meth setPrev(P)
+      prev:= P
+   end
+
+   meth setFirst(F)
+      first := F
+   end
+
+   meth setLast(L)
+      last:=L
+   end
+   
+   meth setNote(N)
+      note := N
+   end
+
+   meth addTransformation(T)
+      if @transformation == nil then transformation := T
+      else transformation :=  T|@transformation end
+   end
+   
+   meth createSuite
+      
+      case @note of X|Xr then
+         if @next == nil then 
+	    next := {New Note init(Xr self @transformation nil)}
+	    note := X
+	    {self createSuite}
+	 else
+	    if(Xr == nil) == false then
+	       local B = @next
+	       in
+		  next := {New Note init(Xr self @transformation B)}
+	       end
+	       note := X
+	       {self createSuite}
+	    else
+	       note := X
+	       {self createSuite}
+	    end
+	    
+	 end
+	 
+	 	    
+      else
+	 if {IsTransformation @note} == false then
+	    case @note of Nom#Octave then
+	       note:= {ToNote @note}
+	    else
+	 
+	       local R = {Record.make {Record.label @note} [facteur]} in
+		  R.facteur = @note.facteur
+		  {self addTransformation(R)}
+	       end
+	       note := @note.1
+	       {self createSuite}
+	    end
+
+	 else
+	    note:= {ToNote @note}
+	 end
+	 
+	 
+      end
+      
+   end
+   
+   
+end
+
 % Vous ne pouvez pas utiliser le mot-clé 'declare'.
 local Mix Interprete Projet CWD in
    % CWD contient le chemin complet vers le dossier contenant le fichier 'code.oz'
@@ -21,6 +140,7 @@ local Mix Interprete Projet CWD in
       IsTransformation
       IsMultipleTransformation
       ChangeMTransformationInList
+      Note
       
    in
       % Mix prends une musique et doit retourner un vecteur audio.
@@ -35,27 +155,23 @@ local Mix Interprete Projet CWD in
 	 %else
 	 %   nil
 	 %end
+	 local X C  in
 
+   C = {NewCell nil}
 
-	 case Partition of P|Pr then
-	    if {IsMultipleTransformation P} then {Interprete {ChangeMTransformationInList P}}|{Interprete Pr}
-	    else {Interprete P}|{Interprete Pr} end
-	 else
-	    if {IsMultipleTransformation Partition} then {Interprete {ChangeMTransformationInList Partition}}
-	    else Partition
-	       
-	    end
+   X = {New Note init(Partition nil nil nil)}
+   C := X
+   
+   for  while:({@C getNext($)} == nil) == false do
+      {Browse {@C getNote($)} }
+      {Browse {@C getTransformation($)}}
+   C := {@C getNext($)}
+   end
+   
 	 end
+	 
 
 	 
-      end
-
-
-      %Transforme un tableau de liste imbriquées en une seule liste
-      fun {TableToLine T}
-	 case T of P|Pr andthen {IsAList P} then {Append {TableToLine P} {TableToLine Pr} }
-	 else T
-	 end
       end
 
       %Retourne true si L est une liste 
@@ -73,43 +189,12 @@ local Mix Interprete Projet CWD in
       fun {IsTransformation N}
 	 {Atom.is N} == false  
       end
+     
 
-      %Retourne une liste de transformation 
-      fun {ChangeMTransformationInList T}
 
-	 local Result = {NewCell nil} R = {NewCell nil} in
-	 
-	    for E in T.1 do
-
-	       R := {Record.make  {Record.label  T} [facteur 1]}
-	       @R.facteur = T.facteur
-	       @R.1 = E
-	       if @Result == nil then Result:= @R else
-	       Result := @Result|@R end
-	    
-	    end
-
-	    @Result
-
-	 end
-	 
-      end
-      
       
       %Transforme une note sous format record 
       fun {ToNote Note}
-
-	 if {Atom.is Note} == false then 
-	    case Note.1 of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:{Record.label  Note} facteur:Note.facteur)
-	    [] Atom then
-	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:{Record.label  Note} facteur:Note.facteur)
-	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:{Record.label  Note} facteur:Note.facteur)
-	       else nil
-	       end
-	    else nil
-	    end
-	    
-	 else
 	    
 	    case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:none facteur:none)
 	    [] Atom then
@@ -119,7 +204,6 @@ local Mix Interprete Projet CWD in
 	       end
 	    else nil
 	    end
-	 end
       end
       	 
    end
