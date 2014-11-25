@@ -42,7 +42,12 @@ local Mix Interprete Projet CWD in
 
       %Transforme un tableau de liste imbriquées en une seule liste
       fun {TableToLine T}
-	 case T of P|Pr andthen {IsAList P} then {Append {TableToLine P} {TableToLine Pr} }
+	 case T of P|Pr then 
+	    if {IsAList P} then {Append {TableToLine P} {TableToLine Pr} }
+	    else
+	       {Append [P] {TableToLine Pr} }
+	    end
+	    
 	 else T
 	 end
       end
@@ -98,7 +103,7 @@ local Mix Interprete Projet CWD in
 	 {ChangeMTransformation2 A nil}
       end
 
-      % Renvoie une liste des notes A en y appliquant les transformation T
+      % Renvoie une liste des notes A en y appliquant les transformation T dans l'ordre de T.1 est la première à appliquer
       % T = liste de transformation sous la forme [[type1 facteur1] [type2 facteur2]]
       % A = liste de notes
       fun {ChangeMTransformationInList T A}
@@ -189,7 +194,7 @@ local Mix Interprete Projet CWD in
    %end
 
    local T = [a b etirer(facteur:2.0 c)] in 
-      {Browse {Interprete [T [etirer(facteur:2.0 reduire( facteur:2.0 [a muet(facteur:2.0 a)])) b] b]}}
+      {Browse {Interprete [a [a b] [a b]] }}
       %{Browse {ChangeSTransformationInList [etirer 2.0] [etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a)]}}
       %{Browse {ChangeMTransformationInList [[reduire 2.0] [etirer 2.0] [etirer 2.0]] [a a b]}}
       %{Browse {ChangeMTransformation etirer(facteur:2.0 etirer(facteur:2.0 reduire( facteur:2.0 [a b]))) }}
