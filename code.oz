@@ -1,6 +1,7 @@
 
+
 % Vous ne pouvez pas utiliser le mot-clé 'declare'.
-local Mix Interprete Projet CWD in
+local Mix Interprete Projet CWD ToNote in
    %CWD contient le chemin complet vers le dossier contenant le fichier 'code.oz'
    CWD = {Property.condGet 'testcwd' '/Users/CedricdeBellefroid/Documents/Université/Civil/Bac2/Informatique/Projet/Projet2014/'}
    
@@ -17,7 +18,8 @@ local Mix Interprete Projet CWD in
 
    local
       %Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
-      ToNote
+      %ToNote
+      ToNoteNT
       TableToLine
       IsAList
       IsTransformation
@@ -26,7 +28,8 @@ local Mix Interprete Projet CWD in
       ChangeMTransformationInList
       ModifyInSimpleTransformation
       ChangeMTransformation
-      
+      ToNoteT
+      TransformationToNote
       
    in
       
@@ -45,10 +48,11 @@ local Mix Interprete Projet CWD in
 	 case T of P|Pr then 
 	    if {IsAList P} then {Append {TableToLine P} {TableToLine Pr} }
 	    else
-	       {Append [P] {TableToLine Pr} }
+	       {Append [{ToNote P}] {TableToLine Pr} }
 	    end
 	    
-	 else T
+	 else
+	    T
 	 end
       end
 
@@ -160,25 +164,64 @@ local Mix Interprete Projet CWD in
 
       %Retourne true si c'est une transformation, false sinon
       fun {IsTransformation N}
-	 {Atom.is N} == false  
+	 case N of Nom#Octave then false
+	 else {Atom.is N} == false  end
       end
-     
 
-
-      
-      %Transforme une note sous format record 
+      %Transforme une note sous format note(nom: octave: alteration: transformation:)
+      %Note = une note ou note transformée
       fun {ToNote Note}
-	    
-	    case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:none facteur:none)
+	 if  {IsTransformation Note} then
+	     {TransformationToNote Note}
+	 else {ToNoteNT Note}
+	 end
+      end
+      
+      %Transforme une note non transformée sous format note(nom: octave: alteration: transformation:none)
+      %Note = une note non transformée
+      fun {ToNoteNT Note}
+	    case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:none)
 	    [] Atom then
-	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:none facteur:none)
-	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:none facteur:none)
+	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:none)
+	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:none)
 	       else nil
 	       end
 	    else nil
 	    end
       end
-      	 
+
+      %Transforme une note transformée sous format note(nom: octave: alteration: transformation:)
+      %T = Note avec transformations
+      fun {TransformationToNote T}
+	 fun {TransformationToNote2 T Liste}
+	    if {IsTransformation T.1} then
+	       if Liste == nil then {TransformationToNote2 T.1 [[{Record.label T} T.facteur]]}
+	       else {TransformationToNote2 T.1 {Append [[{Record.label T} T.facteur]] Liste}}
+	       end
+	    else
+	       if Liste == nil then {ToNoteT T.1 [[{Record.label T} T.facteur]]}
+	       else {ToNoteT T.1 {Append [[{Record.label T} T.facteur]] Liste}}
+	       end
+	    end
+	 end in
+	 {TransformationToNote2 T nil}
+      end
+
+      %Transforme une note transformée sous format note(nom: octave: alteration: transformation:T)
+      %T est une liste de transformations de la première à appliquer à la dernière
+      %Note est la note dont les transformation sont T
+      fun {ToNoteT Note T}
+	 case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:T)
+	    [] Atom then
+	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:T)
+	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:T)
+	       else nil
+	       end
+	 else nil
+	 end
+      end
+
+      
    end
 
    %local 
@@ -193,11 +236,21 @@ local Mix Interprete Projet CWD in
    %   {Browse {Projet.run Mix Interprete Music CWD#'out.wav'}}
    %end
 
-   local T = [a b etirer(facteur:2.0 c)] in 
-      {Browse {Interprete [a [a b] [a b]] }}
+   local T = [a b etirer(facteur:2.0 c)]
+   Tune = [b b c d d c b a g g a b]
+   End1 = [etirer(facteur:1.5 b) etirer(facteur:0.5 a) etirer(facteur:2.0 a)]
+   End2 = [etirer(facteur:1.5 a) etirer(facteur:0.5 g) etirer(facteur:2.0 g)]
+   Interlude = [a a b g a etirer(facteur:0.5 [b c#5])
+                    b g a etirer(facteur:0.5 [b c#5])
+		b a g a etirer(facteur:2.0 d) ]
+   in
+      {Browse {Interprete [Tune End1 Tune End2 Interlude Tune End2]}}
+      %{Browse {Interprete [a [jouer(facteur:3.0 [a [b reduire(facteur:6.0 a)]]) etirer(facteur:2.0 [a#2 reduire(facteur:3.0 [a b2])])]] }}
       %{Browse {ChangeSTransformationInList [etirer 2.0] [etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a)]}}
       %{Browse {ChangeMTransformationInList [[reduire 2.0] [etirer 2.0] [etirer 2.0]] [a a b]}}
       %{Browse {ChangeMTransformation etirer(facteur:2.0 etirer(facteur:2.0 reduire( facteur:2.0 [a b]))) }}
+      %{Browse {ToNote etirer(facteur:2.0 reduire( facteur:3.0 jouer(facteur:4.0 b#2)))}}
+      %{Browse {TransformationToNote etirer(facteur:2.0 etirer(facteur:3.0 a))}}
    end
    
 end
