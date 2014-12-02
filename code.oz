@@ -1,7 +1,7 @@
 
 
 % Vous ne pouvez pas utiliser le mot-clé 'declare'.
-local Mix Interprete Projet CWD in
+local Mix Interprete Projet CWD  in
    %CWD contient le chemin complet vers le dossier contenant le fichier 'code.oz'
    CWD = {Property.condGet 'testcwd' '/Users/Martin/Documents/Université/2ème_année/Q3/Informatique/ProjetInfo/'}
    
@@ -38,6 +38,7 @@ local Mix Interprete Projet CWD in
       Transformation
       FacteurTotalEtirer
       DureeTotalePartition
+      TransformationSilence
       
       
    in
@@ -52,7 +53,7 @@ local Mix Interprete Projet CWD in
 	 {ToListeOfEchantillon {TableToLine {ModifyInSimpleTransformation Partition}}}
       end
 
-      %Transforme un tableau de liste imbriquées en une seule liste
+      %Transforme un tableau de liste imbriquées en une seule liste en transformant chaque valeur en note(......)
       fun {TableToLine T}
 	 case T of P|Pr then 
 	    if {IsAList P} then {Append {TableToLine P} {TableToLine Pr} }
@@ -71,10 +72,11 @@ local Mix Interprete Projet CWD in
       fun {ModifyInSimpleTransformation L}
 	 case L of P|Pr then
 	    if {IsMultipleTransformation P} then {ModifyInSimpleTransformation {ModifyInSimpleTransformation {ChangeMTransformation P}}|{ModifyInSimpleTransformation Pr}}
+	    elseif {IsTransformation P} then {ChangeMTransformation P}|{ModifyInSimpleTransformation Pr}
 	    else {ModifyInSimpleTransformation P}|{ModifyInSimpleTransformation Pr} end
 	 else
 	    if {IsMultipleTransformation L} then {ModifyInSimpleTransformation {ChangeMTransformation L}}
-	    else 
+	    else
 	       L
 	    end
 	 end
@@ -87,6 +89,7 @@ local Mix Interprete Projet CWD in
       fun {IsMultipleTransformation T}
 	 if T == nil then  false
 	 elseif {Atom.is T} then false
+	 elseif T == silence then false
 	 elseif  {IsTransformation T} andthen {IsAList T} == false andthen {IsAList T.1} == true then true
 	 else
 	    if  {IsTransformation T.1}  andthen {IsAList T.1} == false then 
@@ -100,17 +103,24 @@ local Mix Interprete Projet CWD in
       % Renvoie une liste de notes en y appliquant les transformations adéquates
       % A = transformation ex: etirer(facteur:2.0 reduire( facteur: 3.0 [a b]))
       fun {ChangeMTransformation A}
-
 	 fun {ChangeMTransformation2 A Acc}
-      
 	    if  {IsTransformation A} andthen {IsAList A} == false then
 	       local T in
-		  if {Record.label A} == 'transpose' then T = [{Record.label A} A.demitons]
-		  else T = [{Record.label A} A.facteur] end
+		  if {Value.hasFeature A facteur} then T = [{Record.label A} A.facteur]
+		  else
+		     if {Record.label A} == 'transpose' then T = [{Record.label A} A.demitons]
+		     elseif {Record.label A} == 'duree' then T = [{Record.label A} A.secondes]
+			elseif {Record.label A} == 'muet' then T = [{Record.label A} nil]
+		     else T = [{Record.label A} A.note]	   end
+		  end
 		  {ChangeMTransformation2 A.1 T|Acc}
 	       end
 	    else
-	       {ChangeMTransformationInList Acc A}
+	       case A of P|Pr then
+		  {ChangeMTransformationInList Acc A}
+	       else
+		  {ChangeMTransformationInList Acc [A]}
+	       end
 	    end
 	 end in
    
@@ -135,14 +145,15 @@ local Mix Interprete Projet CWD in
 
 
       % Renvoie une liste de A en y appliquant la trasformation T
-      %Si une T est une durée, la fonction va calculer la durée 'partielle' de chaque note en fonction des transformations qui y sont appliquées
+      %Si T est une durée, la fonction va calculer la durée 'partielle' de chaque note en fonction des transformations qui y sont appliquées
+      %Si T est un bourdon, cela va renvoyer le nombre de fois la chaine donnée 
       % T = [type facteur]
       % A = liste de notes
       fun {ChangeSTransformationInList T A}
 	 fun {ChangeSTransformationInList2 T A Acc D}
 	    case A of P|Pr andthen (Pr == nil) == false then
 	       local R = {Record.make T.1 [1 facteur]} in
-		  if T.1 == duree then R.facteur = D * {FacteurTotalEtirer P}
+		  if T.1 == 'duree' then R.facteur = D * {FacteurTotalEtirer P}
 		  else R.facteur = T.2.1 end
 		  R.1 = P
 		  if Acc == nil then {ChangeSTransformationInList2 T Pr R D}
@@ -159,7 +170,10 @@ local Mix Interprete Projet CWD in
 		     else R.facteur = T.2.1 end
 		     R.1 = A.1
 		     case Acc of X|Xr then {Append Acc [R]}
-		     else {Append [Acc] [R]} end
+		     else
+			if Acc == nil then [R]
+			else {Append [Acc] [R]} end
+		     end
 		  end
 	       end
 	    end
@@ -176,17 +190,19 @@ local Mix Interprete Projet CWD in
 
 	 %Renvoie la Durée de chaque note en fonction des transformations qui y sont appliquées
 	 %Note = une note sous format 'a' ou 'etirer(etirer(.... a)) attention, pas de liste de notes meme au sein des transformations
-	 fun {FacteurTotalEtirer Note}
+      fun {FacteurTotalEtirer Note}
 	    fun{FacteurTotalEtirer2 Note Acc}
 	       if {IsTransformation Note} then
-		  if {Record.label Note} == 'etirer' orelse {Record.label Note} == 'duree' then {FacteurTotalEtirer2 Note.1 Acc*Note.facteur}
+		  if {Record.label Note} == 'etirer' orelse {Record.label Note} == 'duree' then
+		     if {Value.hasFeature Note secondes} then {FacteurTotalEtirer2 Note.1 Acc*Note.secondes}
+		     else  {FacteurTotalEtirer2 Note.1 Acc*Note.facteur} end
 		  else {FacteurTotalEtirer2 Note.1 Acc}
 		  end
 	       else Acc
 	       end   
 	    end in
 	    {FacteurTotalEtirer2 Note 1.0}   
-	 end
+      end
 
 	 %Renvoie la duree totale d'une liste de note en faisant appel à la fonction FacteurTotalEtirer pour chacune d'entre elles
 	 %A = liste de notes
@@ -212,7 +228,7 @@ local Mix Interprete Projet CWD in
       %Retourne true si c'est une transformation, false sinon
       fun {IsTransformation N}
 	 case N of Nom#Octave then false
-	 else {Atom.is N} == false  end
+	 else {Atom.is N} == false andthen (N == silence) == false  end
       end
 
       %Transforme une note sous format note(nom: octave: alteration: transformation:)
@@ -231,9 +247,10 @@ local Mix Interprete Projet CWD in
 	    [] Atom then
 	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:none)
 	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:none)
-	       else nil
+	       else 
+		  note(nom:silence octave:none alteration:none transformation:none)
 	       end
-	    else nil
+	    else note(nom:silence octave:none alteration:none transformation:none)
 	    end
       end
 
@@ -262,9 +279,9 @@ local Mix Interprete Projet CWD in
 	    [] Atom then
 	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:T)
 	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:T)
-	       else nil
+	       else note(nom:silence octave:none alteration:none transformation:T)
 	       end
-	 else nil
+	 else note(nom:silence octave:none alteration:none transformation:T)
 	 end
       end
 
@@ -289,7 +306,9 @@ local Mix Interprete Projet CWD in
       % Transforme une note sous un format échantillon en y appliquant les transformation adéquates
       % Note = note(nom: octave: alteration: transformation:T)
       fun {ToEchantillon Note}
-	 {Transformation Note.transformation {Octave {NoteN Note.nom } Note.octave Note.alteration} 1.0 none}
+	 if Note.nom == silence then %local R = {Record.make silence [duree]} in R.duree = 1.0 R end
+					{TransformationSilence Note.transformation 1.0}
+	  else {Transformation Note.transformation {Octave {NoteN Note.nom } Note.octave Note.alteration} 1.0 none} end
       end
 
       % Retourne le nombre de demitons qui sépare la note complète de A4
@@ -322,7 +341,11 @@ local Mix Interprete Projet CWD in
 	       if X.2.1 == 0.0 then {Transformation Xr H D In}
 	       else {Transformation Xr H D*X.2.1 In} end
 	    elseif X.1 == 'transpose' then {Transformation Xr H+X.2.1 D In}
-	    elseif X.1 == 'duree' then {Transformation Xr H X.2.1 In}   
+	    elseif X.1 == 'duree' then {Transformation Xr H X.2.1 In}
+	    elseif X.1 == 'bourdon' then
+	       if  X.2.1 == 'silence' then {TransformationSilence [Xr] D}
+	       else {Transformation Xr {Octave {NoteN X.2.1.nom } X.2.1.octave X.2.1.alteration} D none} end
+	    elseif X.1 == 'muet' then {TransformationSilence Xr D}
 	    else {Transformation [Xr] H D In}
 	    end
 	 else
@@ -333,6 +356,35 @@ local Mix Interprete Projet CWD in
 		  R
 	    end
 	 end
+      end
+
+      % Applique à un silence les différentes transformations qu'il doit subir et renvoie un échantillon
+      % T = liste de transformation [type facteur]
+      % D = Duree du silence
+      fun {TransformationSilence T D}
+	 case T of X|Xr then
+	    if X == nil then
+	       local R = {Record.make silence [duree]}  in
+		  R.duree = D
+		  R
+	       end
+	    elseif X.1 == 'etirer' then
+	       if X.2.1 == 0.0 then {TransformationSilence Xr D}
+	       else {TransformationSilence Xr D*X.2.1} end
+	    elseif X.1 == 'transpose' then{TransformationSilence Xr D}
+	    elseif X.1 == 'duree' then {TransformationSilence Xr X.2.1}
+	    elseif X.1 == 'bourdon' then
+	       if  X.2.1 == 'silence' then {TransformationSilence [Xr] D}
+		  else {Transformation Xr {Octave {NoteN X.2.1.nom } X.2.1.octave X.2.1.alteration} D none} end
+	    else {TransformationSilence [Xr] D}
+	    end
+	 else
+	     local R = {Record.make silence [duree]}  in
+		  R.duree = D
+		  R
+	     end
+	 end
+	 
       end
 
       
@@ -377,8 +429,10 @@ local Mix Interprete Projet CWD in
                     b g a etirer(facteur:0.5 [b c#5])
 		b a g a etirer(facteur:2.0 d) ]
    in
-      {Browse {Interprete [Tune End1 Tune End2 Interlude Tune End2]}}
-      %{Browse {Interprete [etirer(facteur:0.0 [transpose(demitons:~5  [a b]) a])]}}
+      %{Browse {Interprete [Tune End1 Tune End2 Interlude Tune End2]}}
+      %{Browse {Interprete [duree(secondes:4.0 [bourdon(note:silence [a b]) a])]}}
+      {Browse {Interprete [duree(secondes:2.0  transpose( demitons:2 bourdon(note:note(nom:a octave:4 alteration:none transformation:T) [duree(secondes:2.0 [a#1 b]) etirer(facteur:2.0 silence) ]))) a duree(secondes:2.0 silence)]}}
+      %{Browse {Interprete [muet([a b etirer(facteur:2.0 silence)])]}}
       %{Browse {ChangeSTransformationInList [etirer 2.0] [etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a)]}}
       %{Browse {ChangeMTransformationInList [[reduire 2.0] [etirer 2.0] [etirer 2.0]] [a a b]}}
       %{Browse {ChangeMTransformation etirer(facteur:2.0 etirer(facteur:2.0 reduire( facteur:2.0 [a b]))) }}
@@ -387,6 +441,7 @@ local Mix Interprete Projet CWD in
       %{Browse {Transformation [[etirer 2.0]] 0 1.0 none}}
       %{Browse {ToFrequency echantillon(duree:0.5 hauteur:10 instrument:none)}}
       %{Browse {Projet.readFile cat.wav}}
+      %{Browse {ChangeSTransformationInList [etirer 2.0] [a]}}
    end
    
 end
