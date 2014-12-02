@@ -3,7 +3,8 @@ local
    ToIntensity
    TallestList
    SmallestList
-   Merge
+   MergeVectorAudio
+   TotalIntensity
 in
 
    %A et B sont des listes de floats et {Width B}>{Width A}
@@ -18,9 +19,9 @@ in
    
 
    %Prend un vecteur audio Vect en argument ainsi qu'une intensité I(float) et r   etourne le vecteur multi    plié par l'intensité audio 
-   fun{ToIntensity I Vect}
+   fun{ToIntensity I Vect InTot}
 
-      {Map Vect fun{$ A} I*A end}
+      {Map Vect fun{$ A} I/InTot*A end}
 
    end
 
@@ -46,21 +47,44 @@ in
 
    end
 
-   fun {Merge L}
+   fun {MergeVectorAudio L InTot}
       case L of nil then nil
       [] H|T then
 	 case H of P#Pr then
-	    {SumList {SmallestList {ToIntensity P Pr} {Merge T}} {TallestList {ToIntensity P Pr} {Merge T}}}
+	    {SumList {SmallestList {ToIntensity P Pr InTot} {MergeVectorAudio T InTot}} {TallestList {ToIntensity P Pr InTot} {MergeVectorAudio T InTot}}}
 	 else nil
 	 end
       else
 	 case L of P#Pr then
-	    {ToIntensity P Pr}
+	    {ToIntensity P Pr InTot}
 	 else nil
 	 end
       end
    end
+
+   fun {TotalIntensity L}
+      fun {TotalIntensity2 L Acc}
+	 case L of H|T then
+	       case H of P#Pr then
+		  if P == nil then {TotalIntensity2 T Acc}
+		  elseif Pr == nil then {TotalIntensity2 T Acc}
+		  else {TotalIntensity2 T Acc+P} end
+	       else {TotalIntensity2 T Acc} end
+	 else
+	    case L of P#Pr then
+		  if P == nil then Acc
+		  elseif Pr == nil then Acc
+		  else  Acc+P end
+	    else Acc end
+	 end
+      end in
+      {TotalIntensity2 L 0.0} 
+   end
    
    %{Browse {SumList [1 1 1 1 1] [1 2 3 4 5 6 7 8 9 10]}} %OK
-   {Browse {Merge [0.5#[1.0 2.0 3.0 4.0] 2.0#[1.0 1.0 1.0 1.0 1.0]]}} %OK
+   {Browse {MergeVectorAudio [0.5#[1.0 2.0 3.0 5.0 4.0] 1.0#[1.0 1.0 1.0 1.0 1.0]] {TotalIntensity [0.5#[1.0 2.0 3.0 4.0] 1.0#[1.0 1.0 1.0 1.0 1.0]]}}} %OK
+   %{Browse {TotalIntensity [0.5#[1.0 2.0 3.0 4.0] 0.3#[1.0 1.0 1.0 1.0 1.0]]}}
+
+   %{Browse {FromMusicToVectorAudioTuple [0.5# Interprete }}
+   
 end

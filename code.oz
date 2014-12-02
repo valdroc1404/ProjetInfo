@@ -18,7 +18,6 @@ local Mix Interprete Projet CWD  in
 
    local
       %Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
-      %ToNote
       ToNoteNT
       TableToLine
       IsAList
@@ -39,15 +38,268 @@ local Mix Interprete Projet CWD  in
       FacteurTotalEtirer
       DureeTotalePartition
       TransformationSilence
-      
+
+%%%%%%%%%%%%%%%
+
+      ChooseTypeOfMix
+      ToAudioVector
+      FromVoixToAudioVectorList
+      Clip
+      RepetitionN
+      FromMusicToVectorAudioTuple
+      SumList
+      ToIntensity
+      TallestList
+      SmallestList
+      MergeVectorAudio
+      Cut
+      RepetitionS
+      Echo
+      DureeVecteurAudio
+      EchoRepetition
+      SumDecadence
       
    in
       
       % Mix prends une musique et doit retourner un vecteur audio.
-      %fun {Mix Interprete Music}
-      %   Audio
-      %end
+      fun {Mix Interprete Music}
+	 case {Flatten Music} of nil then nil %%%
+	 [] H|T then {Flatten {ChooseTypeOfMix H Interprete} |{Mix Interprete T}}
+	 else {ChooseTypeOfMix Music Interprete}
+	 end
+      end
 
+
+      fun  {ChooseTypeOfMix Element Interprete}
+
+	 if {Record.is Element} then
+
+	    if {Record.label Element} == 'voix' then {FromVoixToAudioVectorList {Flatten Element.1}}
+	    elseif {Record.label Element} == 'wave' then 'wave' %% wave
+	    elseif {Record.label Element} == 'merge' then
+	       local List = {FromMusicToVectorAudioTuple Element.1 Interprete } in 
+		  {MergeVectorAudio List}
+	       end
+	    elseif {Record.label Element} == 'renverser' then {Reverse {Mix Interprete Element.1}}
+	    elseif {Record.label Element} == 'repetition' then
+	       if {Value.hasFeature Element nombre} then {RepetitionN Element.nombre {Mix Interprete Element.1}}
+	       else {RepetitionS Element.duree {Mix Interprete Element.1}} end
+	    elseif {Record.label Element} == 'clip'  then {Clip Element}
+	    elseif {Record.label Element} == 'echo' then
+	       if {Value.hasFeature Element repetition} then {Echo Element.1 Element.delai Element.decadence Element.repetition Interprete}
+	       elseif {Value.hasFeature Element decadence} then {Echo Element.1 Element.delai Element.decadence nil Interprete}
+	       else {Echo Element.1 Element.delai nil nil Interprete} end
+	    elseif {Record.label Element} == 'fondu' then 'fondu'
+	    elseif {Record.label Element} == 'fondu_enchainer' then 'fondu_enchainer'%% fondu
+	    elseif {Record.label Element} == 'couper' then {Cut Element.debut Element.fin {Mix Interprete Element.1}}
+	    else
+	       {Browse Element}
+	       {FromVoixToAudioVectorList {Flatten {Interprete [Element]}}}
+	    end 
+	 else nil
+	 end
+      end
+
+
+      % Transforme un échantillon en vecteur audio (44100 éléments par seconde) en passant par la fréquence
+      fun {ToAudioVector Echantillon}
+	 fun {ToAudioVector2 Echantillon Acc Acc2}
+	    local F Vect in
+	       F =  {Pow 2.0 ({IntToFloat Echantillon.hauteur} / 12.0)}*440.0
+	       if Acc < 1.0 then Acc2
+	       else	       
+		  {ToAudioVector2 Echantillon Acc-1.0  {Sin ((2.0*3.14159*F* Acc)/44100.0)}/2.0|Acc2}   
+	       end
+	    end
+	 end in
+	 if {Label Echantillon} == silence then 
+	    {Map {MakeList {FloatToInt Echantillon.duree*44100.0}} fun{$ O} O=0.0 end}	       
+	 else {ToAudioVector2 Echantillon {IntToFloat {FloatToInt (Echantillon.duree * 44101.0)}} nil}
+	 end
+      end
+
+
+      %Transforme une liste d'échantillons (voix) en un vecteur audio
+      fun {FromVoixToAudioVectorList L}
+	 if {List.is L} then
+	    case L of H|T andthen (T == nil) == false then {Append {ToAudioVector H}  {FromVoixToAudioVectorList T}}
+	    else {ToAudioVector L.1}	 
+	    end
+	 else {ToAudioVector L} end
+      end
+
+
+%prend un record Clip comme argument et retourne le vecteur audio de la musique dans le record
+%dont toutes les valeurs sont comprises entre le bas et le haut
+      fun {Clip R}
+	 fun {Clip2 Haut Bas R}
+	    case R of nil then nil
+	    [] H|T then
+	       if H<Bas then Bas | {Clip2 Haut Bas T}
+	       elseif H>Haut then Haut | {Clip2 Haut Bas T}
+	       else H | {Clip2 Haut Bas T}
+	       end
+	    end	
+	 end in
+	 
+	 {Clip2 R.haut R.bas {Mix 'Interprete' R.1}}  %R.1 doit etre remplacé par la fonction mix qui renvoie une liste de vecteurs
+      end
+      
+      
+%Prend un record répétition(R) comme argument et retourne une liste de vecteurs audios correspondant à la répétit   ion de la musique souhaitée le nombre de fois souhaité.
+%Ce record répétition à la structure suivante : repetition(nombre:⟨naturel⟩ ⟨musique⟩) où "nombre" est le nombre d   'occurences qu'il faut faire de la musique.
+      fun {RepetitionN N R}
+	 fun {RepetitionN2 Occ R Acc}
+	    if Occ == 0 then Acc
+	    else {RepetitionN2 Occ-1 R {Append R Acc}}     %Doit prendre la fonction Mix en argument	    
+	    end
+	 end  in
+	 {RepetitionN2 N R nil}
+      end
+      
+      
+      fun {FromMusicToVectorAudioTuple L Interprete }
+	 fun {FromMusicToVectorAudioTuple2 L Interprete Acc}
+	    case L of H|T then 
+	       case H of A#B then
+		  if Acc == nil then {FromMusicToVectorAudioTuple2 T Interprete [A#{Mix Interprete B}] }
+		  else {FromMusicToVectorAudioTuple2 T Interprete {Append Acc [A#{Mix Interprete B}] }} end
+	       else {FromMusicToVectorAudioTuple2 T Interprete Acc}
+	       end   
+	    else
+	       case L of A#B then
+		  if Acc == nil then [A#{Mix Interprete B}]
+		  else {Append Acc [A#{Mix Interprete B}] } end
+	       else Acc
+	       end  
+	    end
+	 end in
+	 {FromMusicToVectorAudioTuple2 L Interprete nil}  
+      end
+
+ %A et B sont des listes de floats et {Width B}>{Width A}
+ %Retourne une liste de floats correspondant à la somme des éléments correspon   dants de chaque liste
+      fun {SumList A B}
+	 case A of H|T then
+	    (A.1+B.1) | {SumList A.2 B.2}
+	 else B
+	 end
+      end
+   
+
+%Prend un vecteur audio Vect en argument ainsi qu'une intensité I(float) et r   etourne le vecteur multi    plié par l'intensité audio 
+      fun{ToIntensity I Vect}
+	 {Map Vect fun{$ A} I*A end}
+      end
+      
+%A et B sont des listes de longueur aléatoire
+%{TallestList A B} renvoie la liste la plus longue
+      fun {TallestList A B}
+	 if {Length B}>{Length A} then B
+	 elseif {Length B}=={Length A} then B
+	 else A
+	 end
+      end
+
+%A et B sont des listes de longueur aléatoire
+%{SmallestList A B} renvoie la liste la plus longue
+      fun {SmallestList A B}
+	 if {Length B}<{Length A} then B
+	 elseif {Length B}=={Length A} then A
+	 else A
+	 end
+      end
+
+      fun {MergeVectorAudio L}
+	 case L of nil then nil
+	 [] H|T then
+	    case H of P#Pr then
+	       {SumList {SmallestList {ToIntensity P Pr} {MergeVectorAudio T}} {TallestList {ToIntensity P Pr} {MergeVectorAudio T}}}
+	    else nil
+	    end
+	 else
+	    case L of P#Pr then
+	       {ToIntensity P Pr}
+	    else nil
+	    end
+	 end
+      end
+
+%Prend comme argument deux floats :Debut(couper.debut) et Fin(couper.fin) et une liste L de vecteurs audios(couper.1)
+   %Renvoie le vecteur audio correspondant à la musique coupée dans le record 
+      fun {Cut Debut Fin L}
+	 fun {Cut2 D Debut Fin L L1}
+	    if Debut < 0.0 andthen Fin > 0.0 then
+	       {Cut2 D 0.0 Fin L {Map {MakeList {FloatToInt (~Debut)*44100.0}} fun{$ O} O=0.0 end}}
+	    elseif Debut < 0.0 andthen Fin < 0.0 then
+	       {Map {MakeList {FloatToInt (Fin-Debut)*44100.0}} fun{$ O} O=0.0 end}
+	    elseif Debut < 0.0 andthen Fin == 0.0 then
+	       {Map {MakeList {FloatToInt (~Debut)*44100.0}} fun{$ O} O=0.0 end}
+	    elseif Debut > 0.0 then
+	       if Debut*44100.0 > {IntToFloat {Length L}} then
+		  {Map {MakeList {FloatToInt (Fin - Debut)*44100.0}} fun{$ O} O=0.0 end}
+	       else {Cut2 D 0.0 Fin L {List.drop L {FloatToInt Debut*44100.0}}}
+	       end
+	    else
+	       if Fin*44100.0 > {IntToFloat {Length L}} then
+		  {Append L1 {Map {MakeList {FloatToInt (Fin*44100.0-{IntToFloat {Length L}})}} fun{$ O} O=0.0 end}}
+	       elseif Fin*44100.0 < {IntToFloat {Length L}} andthen D*44100.0>0.0 then
+		  {List.take L1 {FloatToInt (Fin*44100.0-D*44100.0)}}
+	       elseif Fin*44100.0 < {IntToFloat {Length L}} andthen D*44100.0<0.0 then
+		  {Append L1 {List.take L {FloatToInt (Fin*44100.0)}}}
+	       elseif Fin*44100.0 < {IntToFloat {Length L}} andthen D*44100.0==0.0 then
+		  {List.take L {FloatToInt (Fin*44100.0)}}
+	       else L1
+	       end
+	    end	 
+	 end in      
+	 {Cut2 Debut Debut Fin L nil} 
+      end
+
+      fun {RepetitionS S R}
+	 if S > {DureeVecteurAudio R} then
+	    {Append {RepetitionN  {FloatToInt (S/{DureeVecteurAudio R})*10.0} div 10 R} {Cut 0.0 (S/{DureeVecteurAudio R}-{IntToFloat {FloatToInt (S/{DureeVecteurAudio R})*10.0} div 10}) * {DureeVecteurAudio R} R}}
+	 elseif S == {DureeVecteurAudio R} then R
+	 else {Cut 0.0 S R} 
+	 end
+      end
+
+      fun {DureeVecteurAudio R}
+	 {IntToFloat {Length R}} /44100.0
+      end
+
+      fun {Echo M Delay Decadence Repetition Interprete}
+	 if  Repetition == nil andthen Decadence == nil then {Mix Interprete [merge([0.5#M 0.5#[voix(silence(duree:Delay)) M]])]}
+	 elseif Repetition == nil  then {Mix Interprete [merge([(1.0/(Decadence+1.0))#M (Decadence/(Decadence+1.0))#[voix(silence(duree:Delay)) M]])]}
+	 else {Mix Interprete [merge({EchoRepetition Repetition M Delay Decadence {SumDecadence Repetition Decadence}})]}
+	 end
+      end
+
+      fun {EchoRepetition Repetition M Delay Decadence SumDeca}
+	 fun {EchoRepetition2 Repetition M Decadence SumDeca DecaAcc DelayAcc Return}  
+	    if Repetition > 0 then
+	       {EchoRepetition2 Repetition-1 M Decadence SumDeca DecaAcc*Decadence DelayAcc*2.0 (DecaAcc*Decadence/SumDeca)#[voix([silence(duree:DelayAcc)]) M ]|Return}	 
+	    else Return
+	    end      	 
+	 end in
+	 {EchoRepetition2 Repetition M Decadence SumDeca 1.0 Delay (1.0/SumDeca)#M}  
+      end
+
+      fun {SumDecadence Repetition Decadence}
+	 fun {SumDecadence2 Repetition Acc Decadence}
+	    if Repetition > 0 then
+	       if Acc == 0.0 then {SumDecadence2 Repetition-1 1.0+Decadence Decadence}
+	       else {SumDecadence2 Repetition-1 1.0+Decadence*Acc Decadence}
+	       end
+	    else
+	       if Acc == 0.0 then 1.0 else Acc end
+	    end
+	 end in
+	 {SumDecadence2 Repetition 0.0 Decadence}
+      end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      
       % Interprete doit interpréter une partition
       fun {Interprete Partition}
 	 {ToListeOfEchantillon {TableToLine {ModifyInSimpleTransformation Partition}}}
@@ -431,7 +683,7 @@ local Mix Interprete Projet CWD  in
    in
       %{Browse {Interprete [Tune End1 Tune End2 Interlude Tune End2]}}
       %{Browse {Interprete [duree(secondes:4.0 [bourdon(note:silence [a b]) a])]}}
-      {Browse {Interprete [duree(secondes:2.0  transpose( demitons:2 bourdon(note:note(nom:a octave:4 alteration:none transformation:T) [duree(secondes:2.0 [a#1 b]) etirer(facteur:2.0 silence) ]))) a duree(secondes:2.0 silence)]}}
+      %{Browse {Interprete [duree(secondes:2.0  transpose( demitons:2 bourdon(note:note(nom:a octave:4 alteration:none transformation:T) [duree(secondes:2.0 [a#1 b]) etirer(facteur:2.0 silence) ]))) a duree(secondes:2.0 silence)]}}
       %{Browse {Interprete [muet([a b etirer(facteur:2.0 silence)])]}}
       %{Browse {ChangeSTransformationInList [etirer 2.0] [etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a)]}}
       %{Browse {ChangeMTransformationInList [[reduire 2.0] [etirer 2.0] [etirer 2.0]] [a a b]}}
@@ -442,6 +694,13 @@ local Mix Interprete Projet CWD  in
       %{Browse {ToFrequency echantillon(duree:0.5 hauteur:10 instrument:none)}}
       %{Browse {Projet.readFile cat.wav}}
       %{Browse {ChangeSTransformationInList [etirer 2.0] [a]}}
+
+      %{Browse {Mix Interprete echo(delai:0.0001 decadence:2.0 repetition:2 [voix(echantillon(hauteur:1 duree:0.0002))])}}
+
+      %{Browse {Mix Interprete [voix(echantillon(hauteur:1 duree:0.0003))]}}
+
+      {Browse {Mix Interprete [voix(echantillon(hauteur:1 duree:0.0003)) a]}}
+      
    end
    
 end
