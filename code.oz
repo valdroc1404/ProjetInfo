@@ -3,7 +3,7 @@
 % Vous ne pouvez pas utiliser le mot-clé 'declare'.
 local Mix Interprete Projet CWD in
    %CWD contient le chemin complet vers le dossier contenant le fichier 'code.oz'
-   CWD = {Property.condGet 'testcwd' '/Users/CedricdeBellefroid/Documents/Université/Civil/Bac2/Informatique/Projet/Projet2014/'}
+   CWD = {Property.condGet 'testcwd' '/Users/Martin/Documents/Université/2ème_année/Q3/Informatique/ProjetInfo/'}
    
    % Projet fournit quatre fonctions :
    % {Projet.run Interprete Mix Music 'out.wav'} = ok OR error(...) 
@@ -39,6 +39,7 @@ local Mix Interprete Projet CWD in
       FacteurTotalEtirer
       DureeTotalePartition
       
+      
    in
       
       % Mix prends une musique et doit retourner un vecteur audio.
@@ -67,7 +68,7 @@ local Mix Interprete Projet CWD in
 
       % Modifie une partition à transformations multiples en une partition à transformations uniques
       % L est une partition
-      fun{ModifyInSimpleTransformation L}
+      fun {ModifyInSimpleTransformation L}
 	 case L of P|Pr then
 	    if {IsMultipleTransformation P} then {ModifyInSimpleTransformation {ModifyInSimpleTransformation {ChangeMTransformation P}}|{ModifyInSimpleTransformation Pr}}
 	    else {ModifyInSimpleTransformation P}|{ModifyInSimpleTransformation Pr} end
@@ -96,7 +97,7 @@ local Mix Interprete Projet CWD in
 	 end
       end
 
-      % Renvoie une liste de note en y appliquant les transformation adéquates
+      % Renvoie une liste de notes en y appliquant les transformations adéquates
       % A = transformation ex: etirer(facteur:2.0 reduire( facteur: 3.0 [a b]))
       fun {ChangeMTransformation A}
 
@@ -267,7 +268,7 @@ local Mix Interprete Projet CWD in
 	 end
       end
 
-      % Retourne une liste d'échantillons en fonction d'un liste de notes 
+      % Retourne une liste d'échantillons en fonction d'une liste de notes 
       % Partition = liste de note(.....)
       fun {ToListeOfEchantillon Partition}
 	 fun {ToListeOfEchantillon2 Partition Acc}
@@ -349,8 +350,12 @@ local Mix Interprete Projet CWD in
 	    end
 	 end
       end
+
       
    end
+
+
+
 
    %local 
    %   Music = {Projet.load CWD#'joie.dj.oz'}
@@ -363,7 +368,7 @@ local Mix Interprete Projet CWD in
    %   % seul qui ateste de la validité de votre implémentation.
    %   {Browse {Projet.run Mix Interprete Music CWD#'out.wav'}}
    %end
-
+   
    local T = [a b etirer(facteur:2.0 c)]
    Tune = [b b c d d c b a g g a b]
    End1 = [etirer(facteur:1.5 reduire(facteur:3.0 [a b muet(facteur:4.0 e)])) etirer(facteur:0.5 a) etirer(facteur:2.0 a)]
@@ -380,6 +385,8 @@ local Mix Interprete Projet CWD in
       %{Browse {ToNote etirer(facteur:2.0 reduire( facteur:3.0 jouer(facteur:4.0 b#2)))}}
       %{Browse {TransformationToNote etirer(facteur:2.0 etirer(facteur:3.0 a))}}
       %{Browse {Transformation [[etirer 2.0]] 0 1.0 none}}
+      %{Browse {ToFrequency echantillon(duree:0.5 hauteur:10 instrument:none)}}
+      %{Browse {Projet.readFile cat.wav}}
    end
    
 end
