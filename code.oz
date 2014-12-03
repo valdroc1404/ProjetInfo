@@ -21,6 +21,7 @@ local Mix Interprete Projet CWD  in
       ToNoteNT
       TableToLine
       IsAList
+      IsAList2
       IsTransformation
       IsMultipleTransformation
       ChangeSTransformationInList
@@ -38,6 +39,7 @@ local Mix Interprete Projet CWD  in
       FacteurTotalEtirer
       DureeTotalePartition
       TransformationSilence
+      ListMultipleTransormation
 
 %%%%%%%%%%%%%%%
 
@@ -58,6 +60,15 @@ local Mix Interprete Projet CWD  in
       DureeVecteurAudio
       EchoRepetition
       SumDecadence
+      Fondu
+   FonduOption
+   FonduFermeture
+   L1NonFondu
+   L1Fondu
+   L2Fondu
+   L2NonFondu
+   FonduEnchaine
+   SuperposeList
       
    in
       
@@ -89,8 +100,8 @@ local Mix Interprete Projet CWD  in
 	       if {Value.hasFeature Element repetition} then {Echo Element.1 Element.delai Element.decadence Element.repetition Interprete}
 	       elseif {Value.hasFeature Element decadence} then {Echo Element.1 Element.delai Element.decadence nil Interprete}
 	       else {Echo Element.1 Element.delai nil nil Interprete} end
-	    elseif {Record.label Element} == 'fondu' then 'fondu'
-	    elseif {Record.label Element} == 'fondu_enchainer' then 'fondu_enchainer'%% fondu
+	    elseif {Record.label Element} == 'fondu' then {Fondu Element.ouverture Element.fermeture {Mix Interprete Element.1}}
+	    elseif {Record.label Element} == 'fondu_enchaine' then {FonduEnchaine Element.duree {Mix Interprete Element.1} {Mix Interprete Element.2}}
 	    elseif {Record.label Element} == 'couper' then {Cut Element.debut Element.fin {Mix Interprete Element.1}}
 	    else
 	       local L = {Interprete Element.1} in
@@ -300,6 +311,99 @@ local Mix Interprete Projet CWD  in
 	 {SumDecadence2 Repetition 0.0 Decadence}
       end
 
+       %Prend un Float Duree et deux Listes L1 et L2 en arguments. Duree correspond à la durée du fondu à appliquer, L1 et L2 correspondent a deux vecteurs audios
+   %Retourne un vecteur audio correspondant au fondu enchainé des listes L1 et L2 (Les fondus sont superposés)
+   fun {FonduEnchaine Duree L1 L2}
+      local A B C in
+
+	 A = {Reverse {FonduOption Duree {Reverse L1}}} %Fondu sur la fin du premier vecteur audio
+	 B = {FonduOption Duree L2} %Fondu sur le début du second vecteur audio
+	 C = Duree*44100.0 %Nombre d'éléments affectés par le fondu 
+
+	 {Flatten {L1NonFondu C A} | {SuperposeList {L1Fondu C A} {L2Fondu C B}} | {L2NonFondu C B}}	 
+      end
+   end
+
+
+   %Prend deux listes L1 et L2 de mêmes longueurs en argument
+   %Retourne la combinaison de ces deux liste (Chaque élément a_i de L1 est sommé avec l'élément b_i de L2)
+   fun {SuperposeList L1 L2}
+      fun {SuperposeList2 L1 L2 Acc}
+	 case L1 of H|T then 
+	    {SuperposeList2 T L2.2 L1.1+L2.1|Acc}
+	 else Acc
+	 end
+      end in
+     {Reverse {SuperposeList2 L1 L2 nil}}
+   end
+
+   %Prend une Float Elem et une liste L1 en argument
+   %Retourne L1 à laquelle on à supprimé les Elem derniers éléments
+   %Utilisation : Retourne la partie du premier vecteur audio d'un fondu enchainé dont les valeurs ne sont pas modifiées par le fondu
+   fun {L1NonFondu Elem L1}
+
+      {List.take L1 {FloatToInt ({IntToFloat {Length L1}}-Elem)}}
+      
+   end
+   
+   %Prend une Float Elem et une liste L1 en argument
+   %Retourne une liste contenant les Elem derniers éléments de L1
+   %Utilisation : Retourne la partie du premier vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu   
+   fun {L1Fondu Elem L1}
+
+      {List.drop L1 {FloatToInt {IntToFloat {Length L1}}-Elem}}
+      
+   end
+
+   %Prend une Float Elem et une liste L2 en argument
+   %Retourne une liste contenant les Elem premiers éléments de L2
+   %Utilisation : Retourne la partie du second vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu 
+   fun {L2Fondu Elem L2}
+
+      {List.take  L2 {FloatToInt Elem}}
+      
+   end
+
+   
+   %Prend une Float Elem et une liste L2 en argument
+   %Retourne L2 à laquelle on à supprimé les elem premiers éléments
+   %Utilisation : Retourne la partie du second vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu 
+   fun {L2NonFondu Elem L2}
+
+      {List.drop L2 {FloatToInt Elem}}
+      
+   end
+   
+   
+   
+   
+   %Prend deux floats Ouv et Ferm et une liste L en arguments. Ouv et Ferm sont les durées en secondes des ouvertures et fermetures et L est un vecteur audio
+   %Retourne le vecteur audio auquel à été appliqué un fondu sur la fermeture et l'ouverture
+   % La fonction "Fonduoption" appliquant exactement le fondu recherché pour l'ouverture,
+   %nous avons appliqué la même fonction à la liste renversée que nous avons rerenversée par apres
+   fun {Fondu Ouv Ferm L}
+      
+      {Reverse {FonduOption Ferm {Reverse {FonduOption Ouv L}}}}
+      
+   end
+
+   
+   %Prend un float Opt et une Liste L en arguments. Opt est la duree en secondes de l'option (ouverture/fermeture) souhaitée et L est le vecteur audio auquel appliquer le fondu
+   %Retourne un vecteur audio correspondant au vecteur audio recu auquel est appliqué le fondu à partir du début de la liste
+   fun {FonduOption Opt L}
+      fun {FonduOption2 I L Acc} 
+	 if I == 0.0 then Acc
+	 else
+	    case L of H|T then
+	       {FonduOption2 I-1.0 T H*(I/({IntToFloat{FloatToInt (Opt*44100.0)}}+1.0)) | Acc}
+	    else
+	       L
+	    end
+	 end	 
+      end in
+      {Append {FonduOption2 {IntToFloat {FloatToInt (Opt*44100.0)}} L nil} {List.drop L {FloatToInt Opt*44100.0}}}
+   end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
       
       % Interprete doit interpréter une partition
@@ -370,14 +474,13 @@ local Mix Interprete Projet CWD  in
 		  {ChangeMTransformation2 A.1 T|Acc}
 	       end
 	    else
-	       case A of P|Pr then
-		  {ChangeMTransformationInList Acc A}
-	       else
-		  {ChangeMTransformationInList Acc [A]}
-	       end
+		  case A of P|Pr then
+		     {ChangeMTransformationInList Acc A}
+		  else
+		     {ChangeMTransformationInList Acc [A]}
+		  end
 	    end
 	 end in
-   
 	 {ChangeMTransformation2 A nil}
       end
 
@@ -404,23 +507,27 @@ local Mix Interprete Projet CWD  in
       % T = [type facteur]
       % A = liste de notes
       fun {ChangeSTransformationInList T A}
-	 fun {ChangeSTransformationInList2 T A Acc D}
+	 
+	 fun {ChangeSTransformationInList2 T A Acc D Bool}
+	    
 	    case A of P|Pr andthen (Pr == nil) == false then
 	       local R = {Record.make T.1 [1 facteur]} in
-		  if T.1 == 'duree' then R.facteur = D * {FacteurTotalEtirer P}
+		  if T.1 == 'duree' andthen Bool == true  then
+		     R.facteur = D * {FacteurTotalEtirer P}
 		  else R.facteur = T.2.1 end
 		  R.1 = P
-		  if Acc == nil then {ChangeSTransformationInList2 T Pr R D}
+		  if Acc == nil then {ChangeSTransformationInList2 T Pr R D Bool}
 		  else
-		     case Acc of X|Xr then {ChangeSTransformationInList2 T Pr {Append Acc [R]} D}
-		     else {ChangeSTransformationInList2 T Pr {Append [Acc] [R]} D} end
+		     case Acc of X|Xr then {ChangeSTransformationInList2 T Pr {Append Acc [R]} D Bool}
+		     else {ChangeSTransformationInList2 T Pr {Append [Acc] [R]} D Bool} end
 		  end
 	       end
 	    else
 	       local R = {Record.make T.1 [1 facteur]} in
 		  if A == nil then Acc
 		  else
-		     if T.1 == duree then R.facteur = D * {FacteurTotalEtirer A}
+		     if T.1 == 'duree' andthen Bool == true then
+			R.facteur = D * {FacteurTotalEtirer A.1}
 		     else R.facteur = T.2.1 end
 		     R.1 = A.1
 		     case Acc of X|Xr then {Append Acc [R]}
@@ -433,14 +540,31 @@ local Mix Interprete Projet CWD  in
 	    end
 	 end in
 	 local D in
-	    if T.1 == 'duree' then D = T.2.1/{DureeTotalePartition A}
-	       {ChangeSTransformationInList2 T A nil D}
+	    if T.1 == 'duree'  andthen {ListMultipleTransormation A} then
+	       D = T.2.1/{DureeTotalePartition A}
+	       {ChangeSTransformationInList2 T A nil D true}
+	    elseif T.1 == 'duree' andthen {IsAList2 A} then
+	       D = T.2.1/{DureeTotalePartition A}
+	       {ChangeSTransformationInList2 T A nil D true}
+	        elseif T.1 == 'duree' then
+	       {ChangeSTransformationInList2 T A nil T.2.1 false}  
 	    else
-	       {ChangeSTransformationInList2 T A nil 1.0}
+	       {ChangeSTransformationInList2 T A nil 1.0 false}
 	    end
 	 end
       end
 
+
+      fun {ListMultipleTransormation L}
+	 case L of P|Pr then
+	    if {IsMultipleTransformation P} then true
+	    else {IsMultipleTransformation Pr}
+	    end
+	 else
+	   {IsMultipleTransformation L}
+	 end
+      end
+      
 
 	 %Renvoie la Durée de chaque note en fonction des transformations qui y sont appliquées
 	 %Note = une note sous format 'a' ou 'etirer(etirer(.... a)) attention, pas de liste de notes meme au sein des transformations
@@ -452,6 +576,7 @@ local Mix Interprete Projet CWD  in
 		     else  {FacteurTotalEtirer2 Note.1 Acc*Note.facteur} end
 		  else {FacteurTotalEtirer2 Note.1 Acc}
 		  end
+	       elseif {IsAList2 Note} then {DureeTotalePartition Note}*Acc
 	       else Acc
 	       end   
 	    end in
@@ -460,22 +585,30 @@ local Mix Interprete Projet CWD  in
 
 	 %Renvoie la duree totale d'une liste de note en faisant appel à la fonction FacteurTotalEtirer pour chacune d'entre elles
 	 %A = liste de notes
-	 fun {DureeTotalePartition A}
+      fun {DureeTotalePartition A}
 	    fun {DureeTotalePartition2 A Acc}
 	       case A of P|Pr then
 		  if P == nil then Acc
 		  else {DureeTotalePartition2 Pr Acc+{FacteurTotalEtirer P} } end
-	       else Acc
+	       else
+		  Acc
 	       end
 	    end in
 	    {DureeTotalePartition2 A 0.0}
-	 end
+      end
 
 
 
       %Retourne true si L est une liste 
       fun {IsAList L}
 	 case L of P|Pr then true
+	 else false end
+      end
+
+      fun {IsAList2 L}
+	 case L of P|Pr then
+	    if Pr == nil then false
+	       else true end
 	 else false end
       end
 
@@ -674,8 +807,8 @@ local Mix Interprete Projet CWD  in
       %
       % Si votre code devait ne pas passer nos tests, cet exemple serait le
       % seul qui ateste de la validité de votre implémentation.
-    %{Browse {Projet.run Mix Interprete Music '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
-      {Browse {Projet.run Mix Interprete renverser(merge([0.5#wave('wave/animaux/cow.wav') 0.5#wave('wave/animaux/chicken.wav')])) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
+    {Browse {Projet.run Mix Interprete fondu(ouverture:4.0 fermeture:4.0 Music) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
+      %{Browse {Projet.run Mix Interprete renverser(merge([0.5#wave('wave/animaux/cow.wav') 0.5#wave('wave/animaux/chicken.wav')])) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
 
       
       
