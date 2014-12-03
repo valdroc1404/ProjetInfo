@@ -8,7 +8,7 @@ local
                 b a g a etirer(facteur:2.0 d) ]
 
    % Ceci n'est pas une musique
-   Partition = duree( secondes:10.0 [Tune End1 Tune End2 Interlude Tune End2])
+   Partition = duree( secondes:40.0 [Tune End1 Tune End2 Interlude Tune End2])
 in
    % Ceci est une musique :-)
    [partition(Partition)]

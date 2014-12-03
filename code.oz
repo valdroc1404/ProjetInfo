@@ -13,11 +13,11 @@ local Mix Interprete Projet CWD  in
    %
    % et une constante :
    % Projet.hz = 44100, la fréquence d'échantilonnage (nombre de données par seconde)
-  [Projet] = {Link [CWD#'Projet2014_mozart1.4.ozf']}
+   [Projet] = {Link [CWD#'Projet2014_mozart1.4.ozf']}
 
 
    local
-      Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
+      %Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
       ToNoteNT
       TableToLine
       IsAList
@@ -61,18 +61,18 @@ local Mix Interprete Projet CWD  in
       EchoRepetition
       SumDecadence
       Fondu
-   FonduOption
-   FonduFermeture
-   L1NonFondu
-   L1Fondu
-   L2Fondu
-   L2NonFondu
-   FonduEnchaine
-   SuperposeList
+      FonduOption
+      L1NonFondu
+      L1Fondu
+      L2Fondu
+      L2NonFondu
+      FonduEnchaine
+      SuperposeList
       
    in
       
-      % Mix prends une musique et doit retourner un vecteur audio.
+      % Prend la fonction Interprete et une Musique en argument
+      % Renvoie le vecteur audio correspondant à la musique 
       fun {Mix Interprete Music}
 	 case {Flatten Music} of nil then nil 
 	 [] H|T then {Flatten {ChooseTypeOfMix H Interprete} |{Mix Interprete T}}
@@ -80,11 +80,10 @@ local Mix Interprete Projet CWD  in
 	 end
       end
 
-
-      fun  {ChooseTypeOfMix Element Interprete}
-
+      % Prend un morceau(Element) et Interprete en argument
+      % Renvoie le vecteur audio de cet Element en y appliquant les filtres et transformations demandées
+      fun {ChooseTypeOfMix Element Interprete}
 	 if {Record.is Element} then
-
 	    if {Record.label Element} == 'voix' then {FromVoixToAudioVectorList {Flatten Element.1}}
 	    elseif {Record.label Element} == 'wave' then {Projet.readFile CWD#Element.1}
 	    elseif {Record.label Element} == 'merge' then
@@ -95,7 +94,7 @@ local Mix Interprete Projet CWD  in
 	    elseif {Record.label Element} == 'repetition' then
 	       if {Value.hasFeature Element nombre} then {RepetitionN Element.nombre {Mix Interprete Element.1}}
 	       else {RepetitionS Element.duree {Mix Interprete Element.1}} end
-	    elseif {Record.label Element} == 'clip'  then {Clip Element}
+	    elseif {Record.label Element} == 'clip'  then {Clip Element Interprete}
 	    elseif {Record.label Element} == 'echo' then
 	       if {Value.hasFeature Element repetition} then {Echo Element.1 Element.delai Element.decadence Element.repetition Interprete}
 	       elseif {Value.hasFeature Element decadence} then {Echo Element.1 Element.delai Element.decadence nil Interprete}
@@ -103,48 +102,50 @@ local Mix Interprete Projet CWD  in
 	    elseif {Record.label Element} == 'fondu' then {Fondu Element.ouverture Element.fermeture {Mix Interprete Element.1}}
 	    elseif {Record.label Element} == 'fondu_enchaine' then {FonduEnchaine Element.duree {Mix Interprete Element.1} {Mix Interprete Element.2}}
 	    elseif {Record.label Element} == 'couper' then {Cut Element.debut Element.fin {Mix Interprete Element.1}}
-	    else
-	       local L = {Interprete Element.1} in
+	    else                    
+	       local L = {Interprete Element.1} in % l'Element est une partition
 	       {FromVoixToAudioVectorList  L} end
 	    end 
 	 else nil
 	 end
       end
 
-
-      % Transforme un échantillon en vecteur audio (44100 éléments par seconde) en passant par la fréquence
-      fun {ToAudioVector Echantillon}
-	 fun {ToAudioVector2 Echantillon Acc Acc2}
-	    local F Vect in
-	       F =  {Pow 2.0 ({IntToFloat Echantillon.hauteur} / 12.0)}*440.0
-	       if Acc < 1.0 then Acc2
-	       else	       
-		  {ToAudioVector2 Echantillon Acc-1.0  {Sin ((2.0*3.14159*F* Acc)/44100.0)}/2.0|Acc2}   
-	       end
-	    end
-	 end in
-	 if {Label Echantillon} == silence then 
-	    {Map {MakeList {FloatToInt Echantillon.duree*44100.0}} fun{$ O} O=0.0 end}	       
-	 else {ToAudioVector2 Echantillon {IntToFloat {FloatToInt (Echantillon.duree * 44101.0)}} nil}
-	 end
-      end
-
-
-      %Transforme une liste d'échantillons (voix) en un vecteur audio
+      % L = une voix
+      % Retourne un vecteur audio 
       fun {FromVoixToAudioVectorList L}
 	 if {IsAList L} then
 	    case L of H|T andthen (T == nil) == false then 
-	       {Append {ToAudioVector H}  {FromVoixToAudioVectorList T}}
+	       {FonduEnchaine 0.2 {ToAudioVector H}  {FromVoixToAudioVectorList T}}
 	    else {ToAudioVector L.1}	 
 	    end
 	 else
 	    {ToAudioVector L} end
       end
 
+      % Prend un échantillon en argument
+      % Retourne le vecteur audio correspondant
+      fun {ToAudioVector Echantillon}
+	 fun {ToAudioVector2 Echantillon Acc Acc2}
+	    local F in
+	       F =  {Pow 2.0 ({IntToFloat Echantillon.hauteur} / 12.0)}*440.0
+	       if Acc < 1.0 then {Fondu 0.1 0.1 Acc2}
+	       else	       
+		  {ToAudioVector2 Echantillon Acc-1.0  {Sin ((2.0*3.14159*F* Acc)/44100.0)}/2.0|Acc2}   
+	       end
+	    end
+	 end in
+	 if {Label Echantillon} == silence then  %Si c'est un silence, vecteur audio rempli de 0
+	    {Map {MakeList {FloatToInt Echantillon.duree*44100.0}} fun{$ O} O=0.0 end}	       
+	 else {ToAudioVector2 Echantillon {IntToFloat {FloatToInt (Echantillon.duree * 44101.0)}} nil}
+	 end
+      end
 
-%prend un record Clip comme argument et retourne le vecteur audio de la musique dans le record
-%dont toutes les valeurs sont comprises entre le bas et le haut
-      fun {Clip R}
+
+      
+
+      % Prend un filtre "clip" et la fonction Interprete 
+      % Renvoie le vecteur audio associé en remplacant les valeurs supérieure(resp. inf) à haut(resp. bas) par haut(resp. bas)
+      fun {Clip R Interprete}
 	 fun {Clip2 Haut Bas R}
 	    case R of nil then nil
 	    [] H|T then
@@ -154,23 +155,39 @@ local Mix Interprete Projet CWD  in
 	       end
 	    end	
 	 end in
-	 
-	 {Clip2 R.haut R.bas {Mix 'Interprete' R.1}}  %R.1 doit etre remplacé par la fonction mix qui renvoie une liste de vecteurs
+	 {Clip2 R.haut R.bas {Mix Interprete R.1}}  %R.1 doit etre remplacé par la fonction mix qui renvoie une liste de vecteurs
       end
       
       
-%Prend un record répétition(R) comme argument et retourne une liste de vecteurs audios correspondant à la répétit   ion de la musique souhaitée le nombre de fois souhaité.
-%Ce record répétition à la structure suivante : repetition(nombre:⟨naturel⟩ ⟨musique⟩) où "nombre" est le nombre d   'occurences qu'il faut faire de la musique.
+      % N = nombre de repetitions, R = vecteur audio à répéter
+      % Renvoie le vecteur audio en y ajoutant les vecteurs audios repetés
       fun {RepetitionN N R}
 	 fun {RepetitionN2 Occ R Acc}
 	    if Occ == 0 then Acc
-	    else {RepetitionN2 Occ-1 R {Append R Acc}}     %Doit prendre la fonction Mix en argument	    
+	    else {RepetitionN2 Occ-1 R {Append R Acc}}    	    
 	    end
 	 end  in
 	 {RepetitionN2 N R nil}
       end
+
+      % S = duree finale des repetitions, R = vecteur audio à répéter
+      % Renvoie le vecteur audio en y ajoutant les vecteurs audios repetés entièrement ainsi que la fraction en plus 
+      fun {RepetitionS S R}
+	 if S > {DureeVecteurAudio R} then
+	    {Append {RepetitionN  {FloatToInt (S/{DureeVecteurAudio R})*10.0} div 10 R} {Cut 0.0 (S/{DureeVecteurAudio R}-{IntToFloat {FloatToInt (S/{DureeVecteurAudio R})*10.0} div 10}) * {DureeVecteurAudio R} R}} % Regroupe la liste créée par le nombre entier de fois qu'il doit être répété (utilisation de la fonction RepetitionN) et la liste de la fraction restante (Utilisation de la fonction cut entre 0.0 et le temps restant
+	 elseif S == {DureeVecteurAudio R} then R
+	 else {Cut 0.0 S R} %Musique tronquée 
+	 end
+      end
+
+      % R = vecteur audio
+      % Renvoie la duree de ce vecteur audio 
+      fun {DureeVecteurAudio R}
+	 {IntToFloat {Length R}} /44100.0
+      end
       
-      
+      % L = une liste de tupple intensité(float)#Musique, Interprete est la fonction Interprete
+      % Renvoie une liste de tupple intensité(float)#vecteur audio
       fun {FromMusicToVectorAudioTuple L Interprete }
 	 fun {FromMusicToVectorAudioTuple2 L Interprete Acc}
 	    case L of H|T then 
@@ -190,8 +207,8 @@ local Mix Interprete Projet CWD  in
 	 {FromMusicToVectorAudioTuple2 L Interprete nil}  
       end
 
- %A et B sont des listes de floats et {Width B}>{Width A}
- %Retourne une liste de floats correspondant à la somme des éléments correspon   dants de chaque liste
+      % A et B sont des listes de floats et {Length B}>{Length A}
+      % Renvoie la liste correspondant à l'addition de ces deux listes
       fun {SumList A B}
 	 case A of H|T then
 	    (A.1+B.1) | {SumList A.2 B.2}
@@ -200,13 +217,14 @@ local Mix Interprete Projet CWD  in
       end
    
 
-%Prend un vecteur audio Vect en argument ainsi qu'une intensité I(float) et r   etourne le vecteur multi    plié par l'intensité audio 
+      % Vect = vecteur audio, I = intensité associée
+      % Renvoie le vecteur audio combiné de son intensité
       fun{ToIntensity I Vect}
 	 {Map Vect fun{$ A} I*A end}
       end
       
-%A et B sont des listes de longueur aléatoire
-%{TallestList A B} renvoie la liste la plus longue
+      % A et B sont des listes de longueur aléatoire
+      % Renvoie la liste la plus longue 
       fun {TallestList A B}
 	 if {Length B}>{Length A} then B
 	 elseif {Length B}=={Length A} then B
@@ -214,8 +232,8 @@ local Mix Interprete Projet CWD  in
 	 end
       end
 
-%A et B sont des listes de longueur aléatoire
-%{SmallestList A B} renvoie la liste la plus longue
+      %A et B sont des listes de longueur aléatoire
+      % Renvoie la liste la plus courte
       fun {SmallestList A B}
 	 if {Length B}<{Length A} then B
 	 elseif {Length B}=={Length A} then A
@@ -223,6 +241,8 @@ local Mix Interprete Projet CWD  in
 	 end
       end
 
+      % L = liste de tuple regroupant une intensité en float et un vecteur audio ex: 0.5#[0.0 0.2 3.0]
+      % Renvoie le vecteur audio correspondant à la fusion des vecteurs audio entré en argument
       fun {MergeVectorAudio L}
 	 case L of nil then nil
 	 [] H|T then
@@ -238,8 +258,8 @@ local Mix Interprete Projet CWD  in
 	 end
       end
 
-%Prend comme argument deux floats :Debut(couper.debut) et Fin(couper.fin) et une liste L de vecteurs audios(couper.1)
-   %Renvoie le vecteur audio correspondant à la musique coupée dans le record 
+      %Prend comme argument deux floats :Debut(couper.debut) et Fin(couper.fin) et une liste L de vecteurs audios(couper.1)
+      %Renvoie le vecteur audio correspondant à la musique coupée dans le record 
       fun {Cut Debut Fin L}
 	 fun {Cut2 D Debut Fin L L1}
 	    if Debut < 0.0 andthen Fin > 0.0 then
@@ -269,18 +289,8 @@ local Mix Interprete Projet CWD  in
 	 {Cut2 Debut Debut Fin L nil} 
       end
 
-      fun {RepetitionS S R}
-	 if S > {DureeVecteurAudio R} then
-	    {Append {RepetitionN  {FloatToInt (S/{DureeVecteurAudio R})*10.0} div 10 R} {Cut 0.0 (S/{DureeVecteurAudio R}-{IntToFloat {FloatToInt (S/{DureeVecteurAudio R})*10.0} div 10}) * {DureeVecteurAudio R} R}}
-	 elseif S == {DureeVecteurAudio R} then R
-	 else {Cut 0.0 S R} 
-	 end
-      end
-
-      fun {DureeVecteurAudio R}
-	 {IntToFloat {Length R}} /44100.0
-      end
-
+      % M = musique, Delay = delai de l'echo, Decadence = decadence de l'echo, repetition = nombre de repetition de l'echo
+      % Renvoie un vecteur audio en appliquant l'echo demandé à M
       fun {Echo M Delay Decadence Repetition Interprete}
 	 if  Repetition == nil andthen Decadence == nil then {Mix Interprete [merge([0.5#M 0.5#[voix(silence(duree:Delay)) M]])]}
 	 elseif Repetition == nil  then {Mix Interprete [merge([(1.0/(Decadence+1.0))#M (Decadence/(Decadence+1.0))#[voix(silence(duree:Delay)) M]])]}
@@ -288,6 +298,8 @@ local Mix Interprete Projet CWD  in
 	 end
       end
 
+      % Repetition = nombre de repetition, M = musique, Delay = delai, Decadence = decadence, SumDeca = somme des décadence des echos
+      % Renvoie une liste de tuple intensité#musique
       fun {EchoRepetition Repetition M Delay Decadence SumDeca}
 	 fun {EchoRepetition2 Repetition M Decadence SumDeca DecaAcc DelayAcc Return}  
 	    if Repetition > 0 then
@@ -298,6 +310,8 @@ local Mix Interprete Projet CWD  in
 	 {EchoRepetition2 Repetition M Decadence SumDeca 1.0 Delay (1.0/SumDeca)#M}  
       end
 
+      % Repetition = nombre de repetitions, Decadence = decadence entre les echos
+      % Renvoie la somme des décadence de chaque echo + 1 (musique de base)
       fun {SumDecadence Repetition Decadence}
 	 fun {SumDecadence2 Repetition Acc Decadence}
 	    if Repetition > 0 then
@@ -311,98 +325,85 @@ local Mix Interprete Projet CWD  in
 	 {SumDecadence2 Repetition 0.0 Decadence}
       end
 
-       %Prend un Float Duree et deux Listes L1 et L2 en arguments. Duree correspond à la durée du fondu à appliquer, L1 et L2 correspondent a deux vecteurs audios
-   %Retourne un vecteur audio correspondant au fondu enchainé des listes L1 et L2 (Les fondus sont superposés)
-   fun {FonduEnchaine Duree L1 L2}
-      local A B C in
-
-	 A = {Reverse {FonduOption Duree {Reverse L1}}} %Fondu sur la fin du premier vecteur audio
-	 B = {FonduOption Duree L2} %Fondu sur le début du second vecteur audio
-	 C = Duree*44100.0 %Nombre d'éléments affectés par le fondu 
-
-	 {Flatten {L1NonFondu C A} | {SuperposeList {L1Fondu C A} {L2Fondu C B}} | {L2NonFondu C B}}	 
-      end
-   end
-
-
-   %Prend deux listes L1 et L2 de mêmes longueurs en argument
-   %Retourne la combinaison de ces deux liste (Chaque élément a_i de L1 est sommé avec l'élément b_i de L2)
-   fun {SuperposeList L1 L2}
-      fun {SuperposeList2 L1 L2 Acc}
-	 case L1 of H|T then 
-	    {SuperposeList2 T L2.2 L1.1+L2.1|Acc}
-	 else Acc
+      %Prend un Float Duree et deux Listes L1 et L2 en arguments. Duree correspond à la durée du fondu à appliquer, L1 et L2 correspondent a deux vecteurs audios
+      %Retourne un vecteur audio correspondant au fondu enchainé des listes L1 et L2 (Les fondus sont superposés)
+      fun {FonduEnchaine Duree L1 L2}
+	 local A B C in
+	    
+	    A = {Reverse {FonduOption Duree {Reverse L1}}} %Fondu sur la fin du premier vecteur audio
+	    B = {FonduOption Duree L2} %Fondu sur le début du second vecteur audio
+	    C = Duree*44100.0 %Nombre d'éléments affectés par le fondu 
+	    
+	    {Flatten {L1NonFondu C A} | {SuperposeList {L1Fondu C A} {L2Fondu C B}} | {L2NonFondu C B}}	 
 	 end
-      end in
-     {Reverse {SuperposeList2 L1 L2 nil}}
-   end
+      end
 
-   %Prend une Float Elem et une liste L1 en argument
-   %Retourne L1 à laquelle on à supprimé les Elem derniers éléments
-   %Utilisation : Retourne la partie du premier vecteur audio d'un fondu enchainé dont les valeurs ne sont pas modifiées par le fondu
-   fun {L1NonFondu Elem L1}
 
-      {List.take L1 {FloatToInt ({IntToFloat {Length L1}}-Elem)}}
-      
-   end
-   
-   %Prend une Float Elem et une liste L1 en argument
-   %Retourne une liste contenant les Elem derniers éléments de L1
-   %Utilisation : Retourne la partie du premier vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu   
-   fun {L1Fondu Elem L1}
-
-      {List.drop L1 {FloatToInt {IntToFloat {Length L1}}-Elem}}
-      
-   end
-
-   %Prend une Float Elem et une liste L2 en argument
-   %Retourne une liste contenant les Elem premiers éléments de L2
-   %Utilisation : Retourne la partie du second vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu 
-   fun {L2Fondu Elem L2}
-
-      {List.take  L2 {FloatToInt Elem}}
-      
-   end
-
-   
-   %Prend une Float Elem et une liste L2 en argument
-   %Retourne L2 à laquelle on à supprimé les elem premiers éléments
-   %Utilisation : Retourne la partie du second vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu 
-   fun {L2NonFondu Elem L2}
-
-      {List.drop L2 {FloatToInt Elem}}
-      
-   end
-   
-   
-   
-   
-   %Prend deux floats Ouv et Ferm et une liste L en arguments. Ouv et Ferm sont les durées en secondes des ouvertures et fermetures et L est un vecteur audio
-   %Retourne le vecteur audio auquel à été appliqué un fondu sur la fermeture et l'ouverture
-   % La fonction "Fonduoption" appliquant exactement le fondu recherché pour l'ouverture,
-   %nous avons appliqué la même fonction à la liste renversée que nous avons rerenversée par apres
-   fun {Fondu Ouv Ferm L}
-      
-      {Reverse {FonduOption Ferm {Reverse {FonduOption Ouv L}}}}
-      
-   end
-
-   
-   %Prend un float Opt et une Liste L en arguments. Opt est la duree en secondes de l'option (ouverture/fermeture) souhaitée et L est le vecteur audio auquel appliquer le fondu
-   %Retourne un vecteur audio correspondant au vecteur audio recu auquel est appliqué le fondu à partir du début de la liste
-   fun {FonduOption Opt L}
-      fun {FonduOption2 I L Acc} 
-	 if I == 0.0 then Acc
-	 else
-	    case L of H|T then
-	       {FonduOption2 I-1.0 T H*(I/({IntToFloat{FloatToInt (Opt*44100.0)}}+1.0)) | Acc}
-	    else
-	       L
+      %Prend deux listes L1 et L2 de mêmes longueurs en argument
+      %Retourne la combinaison de ces deux liste (Chaque élément a_i de L1 est sommé avec l'élément b_i de L2)
+      fun {SuperposeList L1 L2}
+	 fun {SuperposeList2 L1 L2 Acc}
+	    case L1 of H|T then 
+	       {SuperposeList2 T L2.2 L1.1+L2.1|Acc}
+	    else Acc
 	    end
-	 end	 
-      end in
-      {Append {FonduOption2 {IntToFloat {FloatToInt (Opt*44100.0)}} L nil} {List.drop L {FloatToInt Opt*44100.0}}}
-   end
+	 end in
+	 {Reverse {SuperposeList2 L1 L2 nil}}
+      end
+
+      %Prend une Float Elem et une liste L1 en argument
+      %Retourne L1 à laquelle on à supprimé les Elem derniers éléments
+      %Utilisation : Retourne la partie du premier vecteur audio d'un fondu enchainé dont les valeurs ne sont pas modifiées par le fondu
+      fun {L1NonFondu Elem L1}
+	 {List.take L1 {FloatToInt ({IntToFloat {Length L1}}-Elem)}}
+      end
+   
+      %Prend une Float Elem et une liste L1 en argument
+      %Retourne une liste contenant les Elem derniers éléments de L1
+      %Utilisation : Retourne la partie du premier vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu   
+      fun {L1Fondu Elem L1}
+	 {List.drop L1 {FloatToInt {IntToFloat {Length L1}}-Elem}}
+      end
+
+      %Prend une Float Elem et une liste L2 en argument
+      %Retourne une liste contenant les Elem premiers éléments de L2
+      %Utilisation : Retourne la partie du second vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu 
+      fun {L2Fondu Elem L2}
+	 {List.take  L2 {FloatToInt Elem}}
+      end
+
+   
+      %Prend une Float Elem et une liste L2 en argument
+      %Retourne L2 à laquelle on à supprimé les elem premiers éléments
+      %Utilisation : Retourne la partie du second vecteur audio d'un fondu enchainé dont les valeurs sont modifiées par le fondu 
+      fun {L2NonFondu Elem L2}
+	 {List.drop L2 {FloatToInt Elem}}
+      end
+   
+
+      % Prend deux floats Ouv et Ferm et une liste L en arguments. Ouv et Ferm sont les durées en secondes des ouvertures et fermetures et L est un vecteur audio
+      % Retourne le vecteur audio auquel à été appliqué un fondu sur la fermeture et l'ouverture
+      % La fonction "Fonduoption" appliquant exactement le fondu recherché pour l'ouverture, nous avons appliqué la même fonction à la liste renversée que nous avons rerenversée par apres
+      fun {Fondu Ouv Ferm L}
+	 {Reverse {FonduOption Ferm {Reverse {FonduOption Ouv L}}}}
+      end
+
+   
+      %Prend un float Opt et une Liste L en arguments. Opt est la duree en secondes de l'option (ouverture/fermeture) souhaitée et L est le vecteur audio auquel appliquer le fondu
+      %Retourne un vecteur audio correspondant au vecteur audio recu auquel est appliqué le fondu à partir du début de la liste
+      fun {FonduOption Opt L}
+	 fun {FonduOption2 I L Acc} 
+	    if I == 0.0 then Acc
+	    else
+	       case L of H|T then
+		  {FonduOption2 I-1.0 T H*(I/({IntToFloat{FloatToInt (Opt*44100.0)}}+1.0)) | Acc}
+	       else
+		  L
+	       end
+	    end	 
+	 end in
+	 {Append {FonduOption2 {IntToFloat {FloatToInt (Opt*44100.0)}} L nil} {List.drop L {FloatToInt Opt*44100.0}}}
+      end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
       
@@ -554,7 +555,8 @@ local Mix Interprete Projet CWD  in
 	 end
       end
 
-
+      % L = liste de note transformee ou pas
+      % Renvoie true si L contient au moins une transformation de plusieurs note
       fun {ListMultipleTransormation L}
 	 case L of P|Pr then
 	    if {IsMultipleTransformation P} then true
@@ -583,8 +585,8 @@ local Mix Interprete Projet CWD  in
 	    {FacteurTotalEtirer2 Note 1.0}   
       end
 
-	 %Renvoie la duree totale d'une liste de note en faisant appel à la fonction FacteurTotalEtirer pour chacune d'entre elles
-	 %A = liste de notes
+      %Renvoie la duree totale d'une liste de note en faisant appel à la fonction FacteurTotalEtirer pour chacune d'entre elles
+      %A = liste de notes
       fun {DureeTotalePartition A}
 	    fun {DureeTotalePartition2 A Acc}
 	       case A of P|Pr then
@@ -605,6 +607,7 @@ local Mix Interprete Projet CWD  in
 	 else false end
       end
 
+      % Retourne true si L est une liste de plusieurs elements
       fun {IsAList2 L}
 	 case L of P|Pr then
 	    if Pr == nil then false
@@ -801,51 +804,13 @@ local Mix Interprete Projet CWD  in
    local 
       Music = {Projet.load CWD#'joie.dj.oz'}
    in
-      % Votre code DOIT appeler Projet.run UNE SEULE fois.  Lors de cet appel,
-     % vous devez mixer une musique qui démontre les fonctionalités de votre
-      % programme.
-      %
-      % Si votre code devait ne pas passer nos tests, cet exemple serait le
-      % seul qui ateste de la validité de votre implémentation.
-    {Browse {Projet.run Mix Interprete fondu(ouverture:4.0 fermeture:4.0 Music) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
+     
+    {Browse {Projet.run Mix Interprete Music CWD#'out.wav'}}
       %{Browse {Projet.run Mix Interprete renverser(merge([0.5#wave('wave/animaux/cow.wav') 0.5#wave('wave/animaux/chicken.wav')])) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
 
       
       
    end
-   
-   %local 
-   %Tune = [b b c5 d5 d5 c5 b a g g a b]
-   %End1 = [etirer(facteur:1.5 b) etirer(facteur:0.5 a) etirer(facteur:2.0 a)]
-   %End2 = [etirer(facteur:1.5 a) etirer(facteur:0.5 g) etirer(facteur:2.0 g)]
-   %   Interlude = [a a b g a etirer(facteur:0.5 [b c5]) b g a etirer(facteur:0.5 [b c5]) b a g a etirer(facteur:2.0 d) ]
-   %   Partition = [Tune End1 Tune Interlude End2 Tune End2]
-
-   %in
-      %{Browse {Interprete Partition}}
-      %{Browse {Interprete [[a] [a etirer(facteur:2.0 [a b])]]}}
-      %{Browse {Mix Interprete partition(Partition)}}
-      %{Browse {Interprete Partition}}
-      %{Browse {Interprete [duree(secondes:4.0 [bourdon(note:silence [a b]) a])]}}
-      %{Browse {Interprete [duree(secondes:2.0  transpose( demitons:2 bourdon(note:note(nom:a octave:4 alteration:none transformation:T) [duree(secondes:2.0 [a#1 b]) etirer(facteur:2.0 silence) ]))) a duree(secondes:2.0 silence)]}}
-      %{Browse {Interprete [muet([a b etirer(facteur:2.0 silence)])]}}
-      %{Browse {ChangeSTransformationInList [etirer 2.0] [etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a) etirer(facteur:2.0 a)]}}
-      %{Browse {ChangeMTransformationInList [[reduire 2.0] [etirer 2.0] [etirer 2.0]] [a a b]}}
-      %{Browse {ChangeMTransformation etirer(facteur:2.0 etirer(facteur:2.0 reduire( facteur:2.0 [a b]))) }}
-      %{Browse {ToNote etirer(facteur:2.0 reduire( facteur:3.0 jouer(facteur:4.0 b#2)))}}
-      %{Browse {TransformationToNote etirer(facteur:2.0 etirer(facteur:3.0 a))}}
-      %{Browse {Transformation [[etirer 2.0]] 0 1.0 none}}
-      %{Browse {ToFrequency echantillon(duree:0.5 hauteur:10 instrument:none)}}
-      %{Browse {Projet.readFile cat.wav}}
-      %{Browse {ChangeSTransformationInList [etirer 2.0] [a]}}
-
-      %{Browse {Mix Interprete echo(delai:0.0001 decadence:2.0 repetition:2 [voix(echantillon(hauteur:1 duree:0.0002))])}}
-
-      %{Browse {Mix Interprete [voix([echantillon(hauteur:1 duree:1.0003) echantillon(hauteur:1 duree:1.0003)])]}}
-
-      
-      
-   %end
    
 end
 
