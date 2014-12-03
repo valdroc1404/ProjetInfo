@@ -3,7 +3,7 @@
 % Vous ne pouvez pas utiliser le mot-clé 'declare'.
 local Mix Interprete Projet CWD  in
    %CWD contient le chemin complet vers le dossier contenant le fichier 'code.oz'
-   CWD = {Property.condGet 'testcwd' '/Users/Martin/Documents/Université/2ème_année/Q3/Informatique/ProjetInfo/'}
+   CWD = {Property.condGet 'testcwd' '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/'}
    
    % Projet fournit quatre fonctions :
    % {Projet.run Interprete Mix Music 'out.wav'} = ok OR error(...) 
@@ -13,11 +13,11 @@ local Mix Interprete Projet CWD  in
    %
    % et une constante :
    % Projet.hz = 44100, la fréquence d'échantilonnage (nombre de données par seconde)
-   [Projet] = {Link [CWD#'Projet2014_mozart1.4.ozf']}
+  [Projet] = {Link [CWD#'Projet2014_mozart1.4.ozf']}
 
 
    local
-      %Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
+      Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
       ToNoteNT
       TableToLine
       IsAList
@@ -63,7 +63,7 @@ local Mix Interprete Projet CWD  in
       
       % Mix prends une musique et doit retourner un vecteur audio.
       fun {Mix Interprete Music}
-	 case {Flatten Music} of nil then nil %%%
+	 case {Flatten Music} of nil then nil 
 	 [] H|T then {Flatten {ChooseTypeOfMix H Interprete} |{Mix Interprete T}}
 	 else {ChooseTypeOfMix Music Interprete}
 	 end
@@ -75,7 +75,7 @@ local Mix Interprete Projet CWD  in
 	 if {Record.is Element} then
 
 	    if {Record.label Element} == 'voix' then {FromVoixToAudioVectorList {Flatten Element.1}}
-	    elseif {Record.label Element} == 'wave' then 'wave' %% wave
+	    elseif {Record.label Element} == 'wave' then {Projet.readFile CWD#Element.1}
 	    elseif {Record.label Element} == 'merge' then
 	       local List = {FromMusicToVectorAudioTuple Element.1 Interprete } in 
 		  {MergeVectorAudio List}
@@ -93,8 +93,8 @@ local Mix Interprete Projet CWD  in
 	    elseif {Record.label Element} == 'fondu_enchainer' then 'fondu_enchainer'%% fondu
 	    elseif {Record.label Element} == 'couper' then {Cut Element.debut Element.fin {Mix Interprete Element.1}}
 	    else
-	       {Browse Element}
-	       {FromVoixToAudioVectorList {Flatten {Interprete [Element]}}}
+	       local L = {Interprete Element.1} in
+	       {FromVoixToAudioVectorList  L} end
 	    end 
 	 else nil
 	 end
@@ -121,11 +121,13 @@ local Mix Interprete Projet CWD  in
 
       %Transforme une liste d'échantillons (voix) en un vecteur audio
       fun {FromVoixToAudioVectorList L}
-	 if {List.is L} then
-	    case L of H|T andthen (T == nil) == false then {Append {ToAudioVector H}  {FromVoixToAudioVectorList T}}
+	 if {IsAList L} then
+	    case L of H|T andthen (T == nil) == false then 
+	       {Append {ToAudioVector H}  {FromVoixToAudioVectorList T}}
 	    else {ToAudioVector L.1}	 
 	    end
-	 else {ToAudioVector L} end
+	 else
+	    {ToAudioVector L} end
       end
 
 
@@ -302,7 +304,7 @@ local Mix Interprete Projet CWD  in
       
       % Interprete doit interpréter une partition
       fun {Interprete Partition}
-	 {ToListeOfEchantillon {TableToLine {ModifyInSimpleTransformation Partition}}}
+	 {ToListeOfEchantillon {TableToLine  {ModifyInSimpleTransformation Partition}}}
       end
 
       %Transforme un tableau de liste imbriquées en une seule liste en transformant chaque valeur en note(......)
@@ -323,9 +325,9 @@ local Mix Interprete Projet CWD  in
       % L est une partition
       fun {ModifyInSimpleTransformation L}
 	 case L of P|Pr then
-	    if {IsMultipleTransformation P} then {ModifyInSimpleTransformation {ModifyInSimpleTransformation {ChangeMTransformation P}}|{ModifyInSimpleTransformation Pr}}
-	    elseif {IsTransformation P} then {ChangeMTransformation P}|{ModifyInSimpleTransformation Pr}
-	    else {ModifyInSimpleTransformation P}|{ModifyInSimpleTransformation Pr} end
+	    if {IsMultipleTransformation P}  then {ModifyInSimpleTransformation {Append {ModifyInSimpleTransformation {ChangeMTransformation P}} {ModifyInSimpleTransformation Pr}}}
+	    elseif {IsTransformation P}  then {Append {ChangeMTransformation P} {ModifyInSimpleTransformation Pr}}
+	    else  {Append [{ModifyInSimpleTransformation P}] {ModifyInSimpleTransformation Pr}} end
 	 else
 	    if {IsMultipleTransformation L} then {ModifyInSimpleTransformation {ChangeMTransformation L}}
 	    else
@@ -480,7 +482,9 @@ local Mix Interprete Projet CWD  in
       %Retourne true si c'est une transformation, false sinon
       fun {IsTransformation N}
 	 case N of Nom#Octave then false
-	 else {Atom.is N} == false andthen (N == silence) == false  end
+	 else
+	    if {IsAList N} then false
+	     else {Atom.is N} == false andthen (N == silence) == false  end end
       end
 
       %Transforme une note sous format note(nom: octave: alteration: transformation:)
@@ -661,27 +665,34 @@ local Mix Interprete Projet CWD  in
 
 
 
-   %local 
-   %   Music = {Projet.load CWD#'joie.dj.oz'}
-   %in
-   %   % Votre code DOIT appeler Projet.run UNE SEULE fois.  Lors de cet appel,
-   %   % vous devez mixer une musique qui démontre les fonctionalités de votre
-   %   % programme.
-   %   %
-   %   % Si votre code devait ne pas passer nos tests, cet exemple serait le
-   %   % seul qui ateste de la validité de votre implémentation.
-   %   {Browse {Projet.run Mix Interprete Music CWD#'out.wav'}}
-   %end
-   
-   local T = [a b etirer(facteur:2.0 c)]
-   Tune = [b b c d d c b a g g a b]
-   End1 = [etirer(facteur:1.5 reduire(facteur:3.0 [a b muet(facteur:4.0 e)])) etirer(facteur:0.5 a) etirer(facteur:2.0 a)]
-   End2 = [etirer(facteur:1.5 a) etirer(facteur:0.5 g) etirer(facteur:2.0 g)]
-   Interlude = [a a b g a etirer(facteur:0.5 [b c#5])
-                    b g a etirer(facteur:0.5 [b c#5])
-		b a g a etirer(facteur:2.0 d) ]
+   local 
+      Music = {Projet.load CWD#'joie.dj.oz'}
    in
-      %{Browse {Interprete [Tune End1 Tune End2 Interlude Tune End2]}}
+      % Votre code DOIT appeler Projet.run UNE SEULE fois.  Lors de cet appel,
+     % vous devez mixer une musique qui démontre les fonctionalités de votre
+      % programme.
+      %
+      % Si votre code devait ne pas passer nos tests, cet exemple serait le
+      % seul qui ateste de la validité de votre implémentation.
+    %{Browse {Projet.run Mix Interprete Music '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
+      {Browse {Projet.run Mix Interprete renverser(merge([0.5#wave('wave/animaux/cow.wav') 0.5#wave('wave/animaux/chicken.wav')])) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
+
+      
+      
+   end
+   
+   %local 
+   %Tune = [b b c5 d5 d5 c5 b a g g a b]
+   %End1 = [etirer(facteur:1.5 b) etirer(facteur:0.5 a) etirer(facteur:2.0 a)]
+   %End2 = [etirer(facteur:1.5 a) etirer(facteur:0.5 g) etirer(facteur:2.0 g)]
+   %   Interlude = [a a b g a etirer(facteur:0.5 [b c5]) b g a etirer(facteur:0.5 [b c5]) b a g a etirer(facteur:2.0 d) ]
+   %   Partition = [Tune End1 Tune Interlude End2 Tune End2]
+
+   %in
+      %{Browse {Interprete Partition}}
+      %{Browse {Interprete [[a] [a etirer(facteur:2.0 [a b])]]}}
+      %{Browse {Mix Interprete partition(Partition)}}
+      %{Browse {Interprete Partition}}
       %{Browse {Interprete [duree(secondes:4.0 [bourdon(note:silence [a b]) a])]}}
       %{Browse {Interprete [duree(secondes:2.0  transpose( demitons:2 bourdon(note:note(nom:a octave:4 alteration:none transformation:T) [duree(secondes:2.0 [a#1 b]) etirer(facteur:2.0 silence) ]))) a duree(secondes:2.0 silence)]}}
       %{Browse {Interprete [muet([a b etirer(facteur:2.0 silence)])]}}
@@ -697,11 +708,11 @@ local Mix Interprete Projet CWD  in
 
       %{Browse {Mix Interprete echo(delai:0.0001 decadence:2.0 repetition:2 [voix(echantillon(hauteur:1 duree:0.0002))])}}
 
-      %{Browse {Mix Interprete [voix(echantillon(hauteur:1 duree:0.0003))]}}
+      %{Browse {Mix Interprete [voix([echantillon(hauteur:1 duree:1.0003) echantillon(hauteur:1 duree:1.0003)])]}}
 
-      {Browse {Mix Interprete [voix(echantillon(hauteur:1 duree:0.0003)) a]}}
       
-   end
+      
+   %end
    
 end
 
