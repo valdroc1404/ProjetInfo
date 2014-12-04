@@ -1,7 +1,7 @@
 
 
 % Vous ne pouvez pas utiliser le mot-clé 'declare'.
-local Mix Interprete Projet CWD  in
+local Mix Interprete Projet CWD in
    %CWD contient le chemin complet vers le dossier contenant le fichier 'code.oz'
    CWD = {Property.condGet 'testcwd' '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/'}
    
@@ -17,7 +17,6 @@ local Mix Interprete Projet CWD  in
 
 
    local
-      %Audio = {Projet.readFile CWD#'wave/animaux/cow.wav'}
       ToNoteNT
       TableToLine
       IsAList
@@ -41,7 +40,7 @@ local Mix Interprete Projet CWD  in
       TransformationSilence
       ListMultipleTransormation
 
-%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%  Fonctions utilisées pour la fonction Mix %%%%%%%%%%%%%%%%%%%
 
       ChooseTypeOfMix
       ToAudioVector
@@ -60,7 +59,6 @@ local Mix Interprete Projet CWD  in
       DureeVecteurAudio
       EchoRepetition
       SumDecadence
-      Fondu
       FonduOption
       L1NonFondu
       L1Fondu
@@ -68,6 +66,11 @@ local Mix Interprete Projet CWD  in
       L2NonFondu
       FonduEnchaine
       SuperposeList
+      FromHauteurToAtome
+      InstrumentWaveToAudio
+      Fondu
+      FonduLocal
+      Lissage
       
    in
       
@@ -84,7 +87,7 @@ local Mix Interprete Projet CWD  in
       % Renvoie le vecteur audio de cet Element en y appliquant les filtres et transformations demandées
       fun {ChooseTypeOfMix Element Interprete}
 	 if {Record.is Element} then
-	    if {Record.label Element} == 'voix' then {FromVoixToAudioVectorList {Flatten Element.1}}
+	    if {Record.label Element} == 'voix' then {FromVoixToAudioVectorList {Flatten Element.1} Interprete}
 	    elseif {Record.label Element} == 'wave' then {Projet.readFile CWD#Element.1}
 	    elseif {Record.label Element} == 'merge' then
 	       local List = {FromMusicToVectorAudioTuple Element.1 Interprete } in 
@@ -104,44 +107,84 @@ local Mix Interprete Projet CWD  in
 	    elseif {Record.label Element} == 'couper' then {Cut Element.debut Element.fin {Mix Interprete Element.1}}
 	    else                    
 	       local L = {Interprete Element.1} in % l'Element est une partition
-	       {FromVoixToAudioVectorList  L} end
+		  {FromVoixToAudioVectorList  L Interprete} end
 	    end 
 	 else nil
 	 end
       end
 
+
+
+
+
+      % Prend la hauteur d'une note comme argument
+      % Renvoie la note sous notation scientifique
+      fun {FromHauteurToAtome Hauteur}
+	 local X = (Hauteur + 48) mod 12 Y = ((Hauteur + 48) div 12) in
+	    if X == 0 then {VirtualString.toAtom {Append "a" {VirtualString.toString Y}}}
+	    elseif X == 2 then  {VirtualString.toAtom {Append "b" {VirtualString.toString Y}}}
+	    elseif X == 3 then  {VirtualString.toAtom {Append "c" {VirtualString.toString Y}}}
+	    elseif X == 5 then  {VirtualString.toAtom {Append "d" {VirtualString.toString Y}}}
+	    elseif X == 7 then  {VirtualString.toAtom {Append "e" {VirtualString.toString Y}}}
+	    elseif X == 8 then  {VirtualString.toAtom {Append "f" {VirtualString.toString Y}}}
+	    elseif X == 10 then {VirtualString.toAtom {Append "g" {VirtualString.toString Y}}}
+	    else
+	       if X == 1 then  {VirtualString.toAtom {Append {Append "a" {VirtualString.toString Y}} "#"}}
+	       elseif X == 4 then  {VirtualString.toAtom {Append {Append "c" {VirtualString.toString Y}} "#"}}
+	       elseif X == 6 then  {VirtualString.toAtom {Append {Append "d" {VirtualString.toString Y}} "#"}}
+	       elseif X == 9 then  {VirtualString.toAtom {Append {Append "f" {VirtualString.toString Y}} "#"}}
+	       elseif X == 11 then {VirtualString.toAtom {Append {Append "g" {VirtualString.toString Y}} "#"}}
+	       else nil
+	       end
+	    end
+	 end  
+      end
+
+
+      % Transforme une note classique en une note avec un instrument
+      % Prend la hauteur, la duree de la note ainsi que l'instrument à appliquer comme argument
+      % Renvoie un vecteur audio de la note faites avec l'instrument 
+      fun {InstrumentWaveToAudio Hauteur Duree Instrument}
+	 local A = {Mix Interprete wave({VirtualString.toAtom {VirtualString.toString "/wave/instruments/"#Instrument#"_"#{FromHauteurToAtome Hauteur}#".wav"}})} in
+	    if {DureeVecteurAudio A} < Duree then {RepetitionS Duree A}
+	    elseif {DureeVecteurAudio A} > Duree then {Fondu 0.2*Duree 0.2*Duree {Cut 0.0 Duree A}} %%Applique le lissage à la note
+	    else A
+	    end
+	 end
+      end
+      
+      
+
       % L = une voix
       % Retourne un vecteur audio 
-      fun {FromVoixToAudioVectorList L}
+      fun {FromVoixToAudioVectorList L Interprete}
 	 if {IsAList L} then
 	    case L of H|T andthen (T == nil) == false then 
-	       {FonduEnchaine 0.2 {ToAudioVector H}  {FromVoixToAudioVectorList T}}
-	    else {ToAudioVector L.1}	 
+	       {Append {ToAudioVector H Interprete}  {FromVoixToAudioVectorList T Interprete}} %Fondu enchaine à appliquer ici
+	    else {ToAudioVector L.1 Interprete}	 
 	    end
 	 else
-	    {ToAudioVector L} end
+	    {ToAudioVector L Interprete} end
       end
 
       % Prend un échantillon en argument
       % Retourne le vecteur audio correspondant
-      fun {ToAudioVector Echantillon}
+      fun {ToAudioVector Echantillon Interprete}
 	 fun {ToAudioVector2 Echantillon Acc Acc2}
 	    local F in
 	       F =  {Pow 2.0 ({IntToFloat Echantillon.hauteur} / 12.0)}*440.0
-	       if Acc < 1.0 then {Fondu 0.1 0.1 Acc2}
+	       if Acc < 1.0 then {Lissage 0.1 1.0 0.2 0.65 0.5 Acc2}
 	       else	       
 		  {ToAudioVector2 Echantillon Acc-1.0  {Sin ((2.0*3.14159*F* Acc)/44100.0)}/2.0|Acc2}   
 	       end
 	    end
 	 end in
 	 if {Label Echantillon} == silence then  %Si c'est un silence, vecteur audio rempli de 0
-	    {Map {MakeList {FloatToInt Echantillon.duree*44100.0}} fun{$ O} O=0.0 end}	       
+	    {Map {MakeList {FloatToInt Echantillon.duree*44100.0}} fun{$ O} O=0.0 end}
+	 elseif (Echantillon.instrument == 'none') == false then {InstrumentWaveToAudio Echantillon.hauteur Echantillon.duree Echantillon.instrument}  %% Si c'est un instrument de la liste
 	 else {ToAudioVector2 Echantillon {IntToFloat {FloatToInt (Echantillon.duree * 44101.0)}} nil}
 	 end
       end
-
-
-      
 
       % Prend un filtre "clip" et la fonction Interprete 
       % Renvoie le vecteur audio associé en remplacant les valeurs supérieure(resp. inf) à haut(resp. bas) par haut(resp. bas)
@@ -402,12 +445,45 @@ local Mix Interprete Projet CWD  in
 	       end
 	    end	 
 	 end in
-	 {Append {FonduOption2 {IntToFloat {FloatToInt (Opt*44100.0)}} L nil} {List.drop L {FloatToInt Opt*44100.0}}}
+	 {Append {FonduOption2 {IntToFloat {FloatToInt (Opt*44100.0)}} {Reverse {List.take L {FloatToInt Opt*44100.0}}} nil} {List.drop L {FloatToInt Opt*44100.0}}}
       end
+
+
+      % Applique un fondu linéaire sur l'entièreté de la liste L, le début commenceant à l'intensité InDeb et la fin finissant à l'intensité InFin
+      % L = vecteur audio, Indeb = intensité du début, Infin = intensité de la fin
+      % Renvoie le vecteur audio en y appliquant le fondu 
+      fun {FonduLocal InDeb InFin L}
+	 fun {FonduLocal2 I L In InL Acc} 
+	    if I == 0.0 then Acc
+	    else
+	       case L of H|T then
+		  {FonduLocal2 I-1.0 T In InL-In H*InL | Acc}
+	       else
+		  L
+	       end
+	    end	 
+	 end in
+	 {FonduLocal2 {IntToFloat {Length L}} {Reverse L} (InFin-InDeb)/({IntToFloat {Length L}}-1.0) InFin  nil} 
+      end
+
+      % Applique un lissage par enveloppe ADSR -> http://fr.wikipedia.org/wiki/Enveloppe_sonore
+      % AttackProp = proportion de l'attaque*, MaxAmp = amplitude maximale, DecayProp = proportion du déclin*, MaintainAmp = amplitude de maintien, MaintainProp = proportion du maintien*
+      % par rapport à la durée totale de la note 
+      % Renvoie le vecteur audio lissé en y appliquant l'enveloppe
+      fun {Lissage AttackProp MaxAmp DecayProp MaintainAmp MaintainProp L}
+	 local D = {DureeVecteurAudio L} L1 L2 L3 L4 in
+	    L1 = {List.take L {FloatToInt AttackProp*{IntToFloat {Length L}}}}
+	    L2 = {List.take {List.drop L {Length L1}} {FloatToInt DecayProp*{IntToFloat {Length L}}}}
+	    L3 = {List.take {List.drop L {Length L1}+{Length L2}} {FloatToInt MaintainProp*{IntToFloat {Length L}}}}
+	    L4 = {List.drop {List.drop L {Length L1}+{Length L2}} {FloatToInt MaintainProp*{IntToFloat {Length L}}}}
+	    {Append {Append {Append  {FonduLocal 0.0 MaxAmp L1}  {FonduLocal MaxAmp MaintainAmp L2}}  {FonduLocal MaintainAmp MaintainAmp L3}} {FonduLocal MaintainAmp 0.0 L4}}
+	 end
+      end
+      
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
       
-      % Interprete doit interpréter une partition
+      % Interprete une partition
       fun {Interprete Partition}
 	 {ToListeOfEchantillon {TableToLine  {ModifyInSimpleTransformation Partition}}}
       end
@@ -418,8 +494,7 @@ local Mix Interprete Projet CWD  in
 	    if {IsAList P} then {Append {TableToLine P} {TableToLine Pr} }
 	    else
 	       {Append [{ToNote P}] {TableToLine Pr} }
-	    end
-	    
+	    end    
 	 else
 	    T
 	 end
@@ -431,10 +506,12 @@ local Mix Interprete Projet CWD  in
       fun {ModifyInSimpleTransformation L}
 	 case L of P|Pr then
 	    if {IsMultipleTransformation P}  then {ModifyInSimpleTransformation {Append {ModifyInSimpleTransformation {ChangeMTransformation P}} {ModifyInSimpleTransformation Pr}}}
-	    elseif {IsTransformation P}  then {Append {ChangeMTransformation P} {ModifyInSimpleTransformation Pr}}
+	    elseif {IsTransformation P}  then
+	       {Append {ChangeMTransformation P} {ModifyInSimpleTransformation Pr}}
 	    else  {Append [{ModifyInSimpleTransformation P}] {ModifyInSimpleTransformation Pr}} end
 	 else
 	    if {IsMultipleTransformation L} then {ModifyInSimpleTransformation {ChangeMTransformation L}}
+	    elseif {IsTransformation L} then {ModifyInSimpleTransformation {ChangeMTransformation L}}
 	    else
 	       L
 	    end
@@ -469,17 +546,19 @@ local Mix Interprete Projet CWD  in
 		  else
 		     if {Record.label A} == 'transpose' then T = [{Record.label A} A.demitons]
 		     elseif {Record.label A} == 'duree' then T = [{Record.label A} A.secondes]
-			elseif {Record.label A} == 'muet' then T = [{Record.label A} nil]
+		     elseif {Record.label A} == 'muet' then
+			T = [{Record.label A} nil]
+		     elseif {Record.label A} == 'instrument' then T =  [{Record.label A} A.nom]
 		     else T = [{Record.label A} A.note]	   end
 		  end
 		  {ChangeMTransformation2 A.1 T|Acc}
 	       end
 	    else
-		  case A of P|Pr then
-		     {ChangeMTransformationInList Acc A}
-		  else
-		     {ChangeMTransformationInList Acc [A]}
-		  end
+	       case A of P|Pr then
+		  {ChangeMTransformationInList Acc A}
+	       else
+		  {ChangeMTransformationInList Acc [A]}
+	       end
 	    end
 	 end in
 	 {ChangeMTransformation2 A nil}
@@ -547,7 +626,7 @@ local Mix Interprete Projet CWD  in
 	    elseif T.1 == 'duree' andthen {IsAList2 A} then
 	       D = T.2.1/{DureeTotalePartition A}
 	       {ChangeSTransformationInList2 T A nil D true}
-	        elseif T.1 == 'duree' then
+	    elseif T.1 == 'duree' then
 	       {ChangeSTransformationInList2 T A nil T.2.1 false}  
 	    else
 	       {ChangeSTransformationInList2 T A nil 1.0 false}
@@ -563,7 +642,7 @@ local Mix Interprete Projet CWD  in
 	    else {IsMultipleTransformation Pr}
 	    end
 	 else
-	   {IsMultipleTransformation L}
+	    {IsMultipleTransformation L}
 	 end
       end
       
@@ -571,32 +650,32 @@ local Mix Interprete Projet CWD  in
 	 %Renvoie la Durée de chaque note en fonction des transformations qui y sont appliquées
 	 %Note = une note sous format 'a' ou 'etirer(etirer(.... a)) attention, pas de liste de notes meme au sein des transformations
       fun {FacteurTotalEtirer Note}
-	    fun{FacteurTotalEtirer2 Note Acc}
-	       if {IsTransformation Note} then
-		  if {Record.label Note} == 'etirer' orelse {Record.label Note} == 'duree' then
-		     if {Value.hasFeature Note secondes} then {FacteurTotalEtirer2 Note.1 Acc*Note.secondes}
-		     else  {FacteurTotalEtirer2 Note.1 Acc*Note.facteur} end
-		  else {FacteurTotalEtirer2 Note.1 Acc}
-		  end
-	       elseif {IsAList2 Note} then {DureeTotalePartition Note}*Acc
-	       else Acc
-	       end   
-	    end in
-	    {FacteurTotalEtirer2 Note 1.0}   
+	 fun{FacteurTotalEtirer2 Note Acc}
+	    if {IsTransformation Note} then
+	       if {Record.label Note} == 'etirer' orelse {Record.label Note} == 'duree' then
+		  if {Value.hasFeature Note secondes} then {FacteurTotalEtirer2 Note.1 Acc*Note.secondes}
+		  else  {FacteurTotalEtirer2 Note.1 Acc*Note.facteur} end
+	       else {FacteurTotalEtirer2 Note.1 Acc}
+	       end
+	    elseif {IsAList2 Note} then {DureeTotalePartition Note}*Acc
+	    else Acc
+	    end   
+	 end in
+	 {FacteurTotalEtirer2 Note 1.0}   
       end
 
       %Renvoie la duree totale d'une liste de note en faisant appel à la fonction FacteurTotalEtirer pour chacune d'entre elles
       %A = liste de notes
       fun {DureeTotalePartition A}
-	    fun {DureeTotalePartition2 A Acc}
-	       case A of P|Pr then
-		  if P == nil then Acc
-		  else {DureeTotalePartition2 Pr Acc+{FacteurTotalEtirer P} } end
-	       else
-		  Acc
-	       end
-	    end in
-	    {DureeTotalePartition2 A 0.0}
+	 fun {DureeTotalePartition2 A Acc}
+	    case A of P|Pr then
+	       if P == nil then Acc
+	       else {DureeTotalePartition2 Pr Acc+{FacteurTotalEtirer P} } end
+	    else
+	       Acc
+	    end
+	 end in
+	 {DureeTotalePartition2 A 0.0}
       end
 
 
@@ -611,7 +690,7 @@ local Mix Interprete Projet CWD  in
       fun {IsAList2 L}
 	 case L of P|Pr then
 	    if Pr == nil then false
-	       else true end
+	    else true end
 	 else false end
       end
 
@@ -620,14 +699,14 @@ local Mix Interprete Projet CWD  in
 	 case N of Nom#Octave then false
 	 else
 	    if {IsAList N} then false
-	     else {Atom.is N} == false andthen (N == silence) == false  end end
+	    else {Atom.is N} == false andthen (N == silence) == false  end end
       end
 
       %Transforme une note sous format note(nom: octave: alteration: transformation:)
       %Note = une note ou note transformée
       fun {ToNote Note}
 	 if  {IsTransformation Note} then
-	     {TransformationToNote Note}
+	    {TransformationToNote Note}
 	 else {ToNoteNT Note}
 	 end
       end
@@ -635,15 +714,15 @@ local Mix Interprete Projet CWD  in
       %Transforme une note non transformée sous format note(nom: octave: alteration: transformation:none)
       %Note = une note non transformée
       fun {ToNoteNT Note}
-	    case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:none)
-	    [] Atom then
-	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:none)
-	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:none)
-	       else 
-		  note(nom:silence octave:none alteration:none transformation:none)
-	       end
-	    else note(nom:silence octave:none alteration:none transformation:none)
+	 case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:none)
+	 [] Atom then
+	    case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:none)
+	    [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:none)
+	    else 
+	       note(nom:silence octave:none alteration:none transformation:none)
 	    end
+	 else note(nom:silence octave:none alteration:none transformation:none)
+	 end
       end
 
       %Transforme une note transformée sous format note(nom: octave: alteration: transformation:)
@@ -668,11 +747,11 @@ local Mix Interprete Projet CWD  in
       %Note est la note dont les transformation sont T
       fun {ToNoteT Note T}
 	 case Note of Nom#Octave then note(nom:Nom octave:Octave alteration:'#' transformation:T)
-	    [] Atom then
-	       case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:T)
-	       [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:T)
-	       else note(nom:silence octave:none alteration:none transformation:T)
-	       end
+	 [] Atom then
+	    case {AtomToString Atom} of [N] then note(nom:Atom octave:4 alteration:none transformation:T)
+	    [] [N O] then note(nom:{StringToAtom [N]}octave:{StringToInt [O]} alteration:none transformation:T)
+	    else note(nom:silence octave:none alteration:none transformation:T)
+	    end
 	 else note(nom:silence octave:none alteration:none transformation:T)
 	 end
       end
@@ -698,9 +777,9 @@ local Mix Interprete Projet CWD  in
       % Transforme une note sous un format échantillon en y appliquant les transformation adéquates
       % Note = note(nom: octave: alteration: transformation:T)
       fun {ToEchantillon Note}
-	 if Note.nom == silence then %local R = {Record.make silence [duree]} in R.duree = 1.0 R end
-					{TransformationSilence Note.transformation 1.0}
-	  else {Transformation Note.transformation {Octave {NoteN Note.nom } Note.octave Note.alteration} 1.0 none} end
+	 if Note.nom == silence then 
+	    {TransformationSilence Note.transformation 1.0}
+	 else {Transformation Note.transformation {Octave {NoteN Note.nom } Note.octave Note.alteration} 1.0 none} end
       end
 
       % Retourne le nombre de demitons qui sépare la note complète de A4
@@ -738,14 +817,17 @@ local Mix Interprete Projet CWD  in
 	       if  X.2.1 == 'silence' then {TransformationSilence [Xr] D}
 	       else {Transformation Xr {Octave {NoteN X.2.1.nom } X.2.1.octave X.2.1.alteration} D none} end
 	    elseif X.1 == 'muet' then {TransformationSilence Xr D}
+	    elseif X.1 == 'instrument' then
+	       if In == 'none' then {Transformation Xr H D X.2.1}
+	       else {Transformation Xr H D In} end
 	    else {Transformation [Xr] H D In}
 	    end
 	 else
 	    local R = {Record.make echantillon [hauteur duree instrument]}  in
-		  R.hauteur = H
-		  R.duree = D
-		  R.instrument = In
-		  R
+	       R.hauteur = H
+	       R.duree = D
+	       R.instrument = In
+	       R
 	    end
 	 end
       end
@@ -763,20 +845,19 @@ local Mix Interprete Projet CWD  in
 	    elseif X.1 == 'etirer' then
 	       if X.2.1 == 0.0 then {TransformationSilence Xr D}
 	       else {TransformationSilence Xr D*X.2.1} end
-	    elseif X.1 == 'transpose' then{TransformationSilence Xr D}
+	    elseif X.1 == 'transpose' then {TransformationSilence Xr D}
 	    elseif X.1 == 'duree' then {TransformationSilence Xr X.2.1}
 	    elseif X.1 == 'bourdon' then
 	       if  X.2.1 == 'silence' then {TransformationSilence [Xr] D}
-		  else {Transformation Xr {Octave {NoteN X.2.1.nom } X.2.1.octave X.2.1.alteration} D none} end
+	       else {Transformation Xr {Octave {NoteN X.2.1.nom } X.2.1.octave X.2.1.alteration} D none} end
 	    else {TransformationSilence [Xr] D}
 	    end
 	 else
-	     local R = {Record.make silence [duree]}  in
-		  R.duree = D
-		  R
-	     end
+	    local R = {Record.make silence [duree]}  in
+	       R.duree = D
+	       R
+	    end
 	 end
-	 
       end
 
       
@@ -798,21 +879,15 @@ local Mix Interprete Projet CWD  in
       
    end
 
-
-
-
    local 
-      Music = {Projet.load CWD#'joie.dj.oz'}
+      Music = {Projet.load CWD#'example.dj.oz'}
    in
-     
-    {Browse {Projet.run Mix Interprete Music CWD#'out.wav'}}
-      %{Browse {Projet.run Mix Interprete renverser(merge([0.5#wave('wave/animaux/cow.wav') 0.5#wave('wave/animaux/chicken.wav')])) '/Users/CedricdeBellefroid/Documents/Universite/Civil/Bac2/Informatique/Projet/ProjetS10/ProjetInfo/out.wav'}}
 
-      
-      
+     
+      {Browse {Projet.run Mix Interprete Music CWD#'out.wav'}}
+     
    end
    
 end
-
 
 
